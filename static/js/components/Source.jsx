@@ -64,7 +64,7 @@ const Source = ({ route }) => {
 
   return (
     <Paper ref={ref} elevation={1}>
-      {width <= 1200 ? (
+      {width <= 600 ? (
         <SourceMobile source={source} />
       ) : (
         <SourceDesktop source={source} />

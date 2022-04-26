@@ -44,6 +44,9 @@ import TNSATForm from "./TNSATForm";
 
 import * as spectraActions from "../ducks/spectra";
 
+import PhotometryPlotSelect from "./PhotometryPlotSelect";
+// import * as Actions from "../ducks/plots";
+
 const VegaHR = React.lazy(() => import("./VegaHR"));
 
 const Plot = React.lazy(() => import(/* webpackChunkName: "Bokeh" */ "./Plot"));
@@ -51,6 +54,18 @@ const Plot = React.lazy(() => import(/* webpackChunkName: "Bokeh" */ "./Plot"));
 const CentroidPlot = React.lazy(() =>
   import(/* webpackChunkName: "CentroidPlot" */ "./CentroidPlot")
 );
+
+const defaultPrefs = {
+  numItems: "10",
+  categories: {
+    classifications: true,
+    comments: true,
+    photometry: true,
+    sources: true,
+    spectra: true,
+    includeCommentsFromBots: false,
+  },
+};
 
 // Export to allow Candidate.jsx to use styles
 export const useSourceStyles = makeStyles((theme) => ({
@@ -167,11 +182,22 @@ const SourceDesktop = ({ source }) => {
   const [rightPaneVisible, setRightPaneVisible] = useState(true);
   const [plotWidth, setPlotWidth] = useState(0);
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [photometryPlotFilter, setPhotometryPlotFilter] = useState([]);
+  const [photometryPlotOrigin, setPhotometryPlotOrigin] = useState([]);
+
+  const photometry = useSelector((state) => state.photometry[source.id]);
+
+  useEffect(() => {
+    if (photometry !== undefined) {
+      setIsLoaded(true);
+    }
+  }, [photometry]);
+
   const { instrumentList, instrumentFormParams } = useSelector(
     (state) => state.instruments
   );
-
-  const photometry = useSelector((state) => state.photometry[source.id]);
 
   const { observingRunList } = useSelector((state) => state.observingRuns);
   const { taxonomyList } = useSelector((state) => state.taxonomies);
@@ -198,7 +224,19 @@ const SourceDesktop = ({ source }) => {
 
   useEffect(() => {
     const resizeObserver = new ResizeObserver((event) => {
-      setPlotWidth(parseInt(event[0].contentBoxSize[0].inlineSize, 10));
+      if (
+        Math.abs(
+          parseInt(event[0].contentBoxSize[0].inlineSize, 10) - plotWidth
+        ) > 100 &&
+        plotWidth !== 0
+      ) {
+        // console.log(
+        //   Math.abs(
+        //     parseInt(event[0].contentBoxSize[0].inlineSize, 10) - plotWidth
+        //   )
+        // );
+        setPlotWidth(parseInt(event[0].contentBoxSize[0].inlineSize, 10));
+      }
     });
 
     resizeObserver.observe(document.getElementById("photometry-container"));
@@ -207,6 +245,33 @@ const SourceDesktop = ({ source }) => {
   const z_round = source.redshift_error
     ? ceil(abs(log10(source.redshift_error)))
     : 4;
+
+  const newsFeedPrefs =
+    useSelector((state) => state.profile.preferences.newsFeed) || defaultPrefs;
+  if (!Object.keys(newsFeedPrefs).includes("categories")) {
+    newsFeedPrefs.categories = defaultPrefs.categories;
+  }
+
+  function handlePlotClick() {
+    // e.preventDefault();
+    // let url = useSelector((state) => state.plots.plotData[url]);
+    // if (url) {
+    //   url += "&filter=clear_all_filter";
+    // }
+    // console.log('url', url);
+    // var myDiv = document.getElementById("buttons_under_photometry_plot_hidden");
+    // var button = document.createElement("button");
+    // var text = document.createTextNode("Show Photometry");
+    // if (myDiv !== null) {
+    //   button.appendChild(text);
+    //   myDiv.appendChild(button);
+    // }
+    // console.log('plot', plot);
+    // if (Object.entries(plot).slice(-1)[0] !== undefined) {
+    //   console.log('url', Object.entries(plot).slice(-1)[0][0]);
+    //   console.log('bokeh', Object.entries(plot).slice(-1)[0][1]["bokehJSON"]);
+    // }
+  }
 
   return (
     <Grid container spacing={2} className={classes.source}>
@@ -419,12 +484,27 @@ const SourceDesktop = ({ source }) => {
                       }
                     >
                       <Plot
-                        url={`/api/internal/plot/photometry/${source.id}?width=${plotWidth}&height=500`}
+                        url={`/api/internal/plot/photometry/${
+                          source.id
+                        }?width=${
+                          plotWidth !== 0 ? plotWidth : 800
+                        }&height=500`}
                       />
                     </Suspense>
                   )}
                 </div>
-                <div className={classes.buttonContainer}>
+                <div
+                  className={classes.buttonContainer}
+                  id="buttons_under_photometry_plot"
+                >
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      setShowSettings(!showSettings);
+                    }}
+                  >
+                    {showSettings ? "Hide Settings" : "Show Settings"}
+                  </Button>
                   <Link to={`/upload_photometry/${source.id}`} role="link">
                     <Button variant="contained">
                       Upload additional photometry
@@ -447,6 +527,33 @@ const SourceDesktop = ({ source }) => {
                       <Button variant="contained">Periodogram Analysis</Button>
                     </Link>
                   )}
+                  <div
+                    style={
+                      showSettings ? { display: "block" } : { display: "none" }
+                    }
+                  >
+                    {isLoaded === true && (
+                      <PhotometryPlotSelect
+                        photometry={photometry.map((spec) => ({
+                          id: spec.id,
+                          filter: spec.filter,
+                          origin: spec.origin,
+                        }))}
+                        photometryPlotFilter={photometryPlotFilter}
+                        setPhotometryPlotFilter={setPhotometryPlotFilter}
+                        photometryPlotOrigin={photometryPlotOrigin}
+                        setPhotometryPlotOrigin={setPhotometryPlotOrigin}
+                      />
+                    )}
+                    <div
+                      className={classes.buttonContainer}
+                      id="buttons_under_photometry_plot_hidden"
+                    >
+                      <Button onClick={handlePlotClick()}>
+                        Clear All Filters
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </Grid>
             </AccordionDetails>
@@ -477,7 +584,11 @@ const SourceDesktop = ({ source }) => {
                       }
                     >
                       <Plot
-                        url={`/api/internal/plot/spectroscopy/${source.id}?width=${plotWidth}&height=600&cacheID=${specIDs}`}
+                        url={`/api/internal/plot/spectroscopy/${
+                          source.id
+                        }?width=${
+                          plotWidth !== 0 ? plotWidth : 800
+                        }&height=600&cacheID=${specIDs}`}
                       />
                     </Suspense>
                   )}
