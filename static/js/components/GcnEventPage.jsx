@@ -64,6 +64,11 @@ const useStyles = makeStyles((theme) => ({
     overflow: "hidden",
     flexDirection: "column",
   },
+  sourcesWithinLocalizationContainer: {
+    display: "flex",
+    overflow: "scroll",
+    flexDirection: "column",
+  },
   comments: {
     width: "100%",
   },
@@ -148,9 +153,6 @@ const GcnEventSourcesPage = ({ route, sources }) => {
 
   return (
     <div className={classes.source}>
-      <Typography variant="h4" gutterBottom align="center">
-        Event sources
-      </Typography>
       <SourceTable
         sources={sources.sources}
         title="Event Sources"
@@ -438,7 +440,8 @@ const GcnEventPage = ({ route }) => {
               {gcnEventSources?.sources.length === 0 ? (
                 <Typography variant="h5">None             </Typography>
               ) : (
-                <div className={styles.gcnEventContainer}>
+                console.log('gcnEventSources', gcnEventSources),
+                <div className={styles.sourcesWithinLocalizationContainer}>
                   <GcnEventSourcesPage
                     route={route}
                     sources={gcnEventSources}

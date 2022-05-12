@@ -31,6 +31,9 @@ const FETCH_SOURCE_AND_MERGE_OK = "skyportal/FETCH_SOURCE_AND_MERGE_OK";
 const FETCH_GCNEVENT_SOURCES = "skyportal/FETCH_GCNEVENT_SOURCES";
 const FETCH_GCNEVENT_SOURCES_OK = "skyportal/FETCH_GCNEVENT_SOURCES_OK";
 
+const REFRESH_GCNEVENT_SOURCES = "skyportal/REFRESH_GCNEVENT_SOURCES";
+const REFRESH_GCNEVENT_SOURCES_OK = "skyportal/REFRESH_GCNEVENT_SOURCES_OK";
+
 const addFilterParamDefaults = (filterParams) => {
   if (!Object.keys(filterParams).includes("pageNumber")) {
     filterParams.pageNumber = 1;
@@ -107,7 +110,7 @@ messageHandler.add((actionType, payload, dispatch, getState) => {
   }
 
   const { gcnEvent } = getState();
-  if (actionType === FETCH_GCNEVENT_SOURCES) {
+  if (actionType === REFRESH_GCNEVENT_SOURCES) {
     if (gcnEvent && gcnEvent.id === payload.gcnEvent.id) {
       dispatch(fetchGcnEventSources(gcnEvent.dateobs));
     }
