@@ -598,6 +598,30 @@ sources:
       - =program_A
       - =program_B
     redshift: 3
+  - id: ZTFinTEST
+    ra: 229.9620404
+    dec: 34.8442757
+    group_ids:
+      - =public_group_id
+      - =program_A
+      - =program_B
+    redshift: 3
+  - id: ZTFinGCNTestExpand
+    ra: 229.9620405
+    dec: 34.8442757
+    group_ids:
+      - =public_group_id
+      - =program_A
+      - =program_B
+    redshift: 3
+  - id: ZTFinGCN2
+    ra: 229.9620403
+    dec: 34.8442757
+    group_ids:
+      - =public_group_id
+      - =program_A
+      - =program_B
+    redshift: 3
 
 sources/ZTF21aaqjmps/comments:
   - obj_id: ZTF21aaqjmps
@@ -741,6 +765,37 @@ photometry:
     stream_ids:
       - =ztf_public
       - =ztf_partnership
+  - obj_id: ZTFinTEST
+    instrument_id: =ZTF
+    assignment_id: 2
+    file: ZTFinTEST_phot.csv
+    group_ids:
+      - =program_A
+      - =program_B
+    stream_ids:
+      - =ztf_public
+      - =ztf_partnership
+  - obj_id: ZTFinGCNTestExpand
+    instrument_id: =ZTF
+    assignment_id: 2
+    file: ZTFinGCNTestExpand_phot.csv
+    group_ids:
+      - =program_A
+      - =program_B
+    stream_ids:
+      - =ztf_public
+      - =ztf_partnership
+  - obj_id: ZTFinGCN2
+    instrument_id: =ZTF
+    assignment_id: 2
+    file: ZTFinGCN2_phot.csv
+    group_ids:
+      - =program_A
+      - =program_B
+    stream_ids:
+      - =ztf_public
+      - =ztf_partnership
+
 
 followup_request:
   - obj_id: ZTFrlh6cyjh

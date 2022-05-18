@@ -438,9 +438,8 @@ const GcnEventPage = ({ route }) => {
             </AccordionSummary>
             <AccordionDetails>
               {gcnEventSources?.sources.length === 0 ? (
-                <Typography variant="h5">None             </Typography>
+                <Typography variant="h5">None </Typography>
               ) : (
-                console.log('gcnEventSources', gcnEventSources),
                 <div className={styles.sourcesWithinLocalizationContainer}>
                   <GcnEventSourcesPage
                     route={route}
@@ -464,7 +463,7 @@ const GcnEventPage = ({ route }) => {
             </AccordionSummary>
             <AccordionDetails>
               {gcnEventObservations?.observations.length === 0 ? (
-                <Typography variant="h5">None             </Typography>
+                <Typography variant="h5">None</Typography>
               ) : (
                 <div className={styles.gcnEventContainer}>
                   <ExecutedObservationsTable
@@ -488,7 +487,7 @@ const GcnEventPage = ({ route }) => {
             </AccordionSummary>
             <AccordionDetails>
               {gcnEventGalaxies?.sources.length === 0 ? (
-                <Typography variant="h5">None             </Typography>
+                <Typography variant="h5">None</Typography>
               ) : (
                 <div className={styles.gcnEventContainer}>
                   <GalaxyTable galaxies={gcnEventGalaxies.sources} />

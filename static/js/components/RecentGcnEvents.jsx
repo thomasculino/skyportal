@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
@@ -8,6 +8,9 @@ import Typography from "@material-ui/core/Typography";
 import DragHandleIcon from "@material-ui/icons/DragHandle";
 import Button from "@material-ui/core/Button";
 import { makeStyles } from "@material-ui/core/styles";
+import AddIcon from "@material-ui/icons/Add";
+import List from "@material-ui/core/List";
+import ListItem from "@material-ui/core/ListItem";
 
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -15,6 +18,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 
 import * as profileActions from "../ducks/profile";
 import * as recentGcnEventsActions from "../ducks/recentGcnEvents";
+import * as sourcesActions from "../ducks/sources";
 import WidgetPrefsDialog from "./WidgetPrefsDialog";
 import GcnTags from "./GcnTags";
 
@@ -52,6 +56,14 @@ const useStyles = makeStyles((theme) => ({
       background: theme.palette.primary.main,
     },
   },
+  eventSources: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  listItem: {
+    width: "max-content",
+  },
 }));
 
 const defaultPrefs = {
@@ -60,17 +72,111 @@ const defaultPrefs = {
 
 const RecentGcnEvents = ({ classes }) => {
   const styles = useStyles();
+  const [gcnEventsSources, setGcnEventsSources] = useState([]);
+  const [recentGcnSources, setRecentGcnSources] = useState("");
 
   const gcnEvents = useSelector((state) => state.recentGcnEvents);
-  const recentEventsPrefs =
+  const recentEvents =
     useSelector((state) => state.profile.preferences?.recentGcnEvents) ||
     defaultPrefs;
+
+  const recentEventSources = useSelector(
+    (state) => state.sources?.gcnEventSources
+  );
 
   const dispatch = useDispatch();
 
   useEffect(() => {
     dispatch(recentGcnEventsActions.fetchRecentGcnEvents());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (recentEventSources) {
+      setRecentGcnSources((state) => ({
+        ...state,
+        [recentEventSources.sources?.length]: recentEventSources,
+      }));
+    }
+  }, [recentEventSources]);
+
+  const gcnEventSourcesAssociated = (gcnEvent) => {
+    dispatch(sourcesActions.fetchGcnEventSources(gcnEvent.dateobs));
+  };
+
+  const getGcnEventSources = (gcnEventList) => {
+    const gcnEventsSourcesTemp = [];
+    gcnEventsSourcesTemp.push(
+      gcnEventList.forEach((gcnEvent) => gcnEventSourcesAssociated(gcnEvent))
+    );
+    setGcnEventsSources(gcnEventsSourcesTemp);
+  };
+
+  if (gcnEventsSources?.length === 0 && gcnEvents) {
+    getGcnEventSources(gcnEvents);
+  } else if (gcnEventsSources?.length > 0 && gcnEvents) {
+    setGcnEventsSources(recentEventSources);
+  }
+
+  const sourcesAssociated = (gcnEvent, index) => {
+    let recentGcnSourcesDefined = Object.entries(recentGcnSources)[index] ?? [];
+    if (recentGcnSourcesDefined[1]) {
+      recentGcnSourcesDefined = recentGcnSourcesDefined[1].sources;
+    }
+    if (
+      recentGcnSourcesDefined.length > 0 &&
+      recentGcnSourcesDefined.length <= 2
+    ) {
+      return (
+        <div className={styles.eventSources}>
+          {recentGcnSources !== "" &&
+            Object.values(recentGcnSources).map((gcn, idx) => {
+              if (idx === index) {
+                return (
+                  <List>
+                    {Object.entries(Object.values(gcn)[3]).map((item) => (
+                      <ListItem key={item[1].id}>
+                        <Link to={`/source/${item[1].id}`}>
+                          <Button color="primary">{item[1].id}</Button>
+                        </Link>
+                      </ListItem>
+                    ))}
+                  </List>
+                );
+              }
+              return null;
+            })}
+        </div>
+      );
+    }
+    return (
+      <div className={styles.eventSources}>
+        {recentGcnSources !== "" &&
+          Object.values(recentGcnSources).map((gcn, idx) => {
+            if (idx === index) {
+              return (
+                <List className={styles.eventSources}>
+                  {Object.entries(Object.values(gcn)[3])
+                    .slice(0, 2)
+                    .map((item) => (
+                      <ListItem key={item[1].id} className={styles.listItem}>
+                        <Link to={`/source/${item[1].id}`}>
+                          <Button color="primary">{item[1].id}</Button>
+                        </Link>
+                      </ListItem>
+                    ))}
+                  <Link to={`/gcn_events/${gcnEvent.dateobs}`}>
+                    <Button color="primary">
+                      <AddIcon />
+                    </Button>
+                  </Link>
+                </List>
+              );
+            }
+            return null;
+          })}
+      </div>
+    );
+  };
 
   return (
     <Paper elevation={1} className={classes.widgetPaperFillSpace}>
@@ -84,7 +190,7 @@ const RecentGcnEvents = ({ classes }) => {
             <WidgetPrefsDialog
               // Only expose num events
               initialValues={{
-                maxNumEvents: recentEventsPrefs.maxNumEvents,
+                maxNumEvents: recentEvents.maxNumEvents,
               }}
               stateBranchName="recentGcnEvents"
               title="Recent Events Preferences"
@@ -95,7 +201,7 @@ const RecentGcnEvents = ({ classes }) => {
         <div className={styles.eventListContainer}>
           <p>Displaying most-viewed events</p>
           <ul className={styles.eventList}>
-            {gcnEvents?.map((gcnEvent) => (
+            {gcnEvents?.map((gcnEvent, index) => (
               <li key={gcnEvent.dateobs}>
                 <div className={styles.eventNameContainer}>
                   &nbsp; -&nbsp;
@@ -108,6 +214,8 @@ const RecentGcnEvents = ({ classes }) => {
                   <div className={styles.eventTags}>
                     <GcnTags gcnEvent={gcnEvent} />
                   </div>
+                  {recentGcnSources !== "" &&
+                    sourcesAssociated(gcnEvent, index)}
                 </div>
               </li>
             ))}
