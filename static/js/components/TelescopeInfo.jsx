@@ -1,9 +1,9 @@
 import React from "react";
 import { useSelector } from "react-redux";
-import { makeStyles } from "@material-ui/core/styles";
-import List from "@material-ui/core/List";
-import ListItem from "@material-ui/core/ListItem";
-import { Divider } from "@material-ui/core";
+import makeStyles from "@mui/styles/makeStyles";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import { Divider } from "@mui/material";
 
 const useStyles = makeStyles(() => ({
   root: {
@@ -119,14 +119,18 @@ const TelescopeInfo = () => {
                 key={`${telescope.id}_time`}
               >
                 <i>
-                  Next Sunrise (Astronomical):{" "}
-                  {telescope.next_twilight_morning_astronomical.slice(0, -4)}{" "}
-                  UTC
+                  {telescope.next_twilight_morning_astronomical &&
+                    `Next Sunrise (Astronomical): ${telescope.next_twilight_morning_astronomical.slice(
+                      0,
+                      -4
+                    )} UTC`}
                 </i>
                 <i>
-                  Next Sunset (Astronomical):{" "}
-                  {telescope.next_twilight_evening_astronomical.slice(0, -4)}{" "}
-                  UTC
+                  {telescope.next_twilight_evening_astronomical &&
+                    `Next Sunset (Astronomical): ${telescope.next_twilight_evening_astronomical.slice(
+                      0,
+                      -4
+                    )} UTC`}
                 </i>
               </div>
             )}

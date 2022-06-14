@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import Form from "@rjsf/material-ui";
-import Select from "@material-ui/core/Select";
-import InputLabel from "@material-ui/core/InputLabel";
-import MenuItem from "@material-ui/core/MenuItem";
-import CircularProgress from "@material-ui/core/CircularProgress";
-import { makeStyles } from "@material-ui/core/styles";
+// eslint-disable-next-line import/no-unresolved
+import Form from "@rjsf/material-ui/v5";
+import Select from "@mui/material/Select";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import CircularProgress from "@mui/material/CircularProgress";
+import makeStyles from "@mui/styles/makeStyles";
 
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -79,7 +80,7 @@ const FollowupRequestPrioritizationForm = () => {
     followupRequestList.length === 0 ||
     Object.keys(instrumentFormParams).length === 0
   ) {
-    return <p>No robotic followup requests for this source...</p>;
+    return <p>No robotic followup requests found...</p>;
   }
 
   if (!selectedGcnEventId) {

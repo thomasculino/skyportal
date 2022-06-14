@@ -3,17 +3,17 @@ import PropTypes from "prop-types";
 import { useSelector, useDispatch } from "react-redux";
 import { Link } from "react-router-dom";
 
-import Accordion from "@material-ui/core/Accordion";
-import AccordionSummary from "@material-ui/core/AccordionSummary";
-import AccordionDetails from "@material-ui/core/AccordionDetails";
-import Button from "@material-ui/core/Button";
-import Chip from "@material-ui/core/Chip";
-import { makeStyles } from "@material-ui/core/styles";
-import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
-import IconButton from "@material-ui/core/IconButton";
-import GetAppIcon from "@material-ui/icons/GetApp";
-import Grid from "@material-ui/core/Grid";
-import Typography from "@material-ui/core/Typography";
+import Accordion from "@mui/material/Accordion";
+import AccordionSummary from "@mui/material/AccordionSummary";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import makeStyles from "@mui/styles/makeStyles";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import IconButton from "@mui/material/IconButton";
+import GetAppIcon from "@mui/icons-material/GetApp";
+import Grid from "@mui/material/Grid";
+import Typography from "@mui/material/Typography";
 
 // eslint-disable-next-line
 import GeoPropTypes from "geojson-prop-types";
@@ -75,10 +75,13 @@ const useStyles = makeStyles((theme) => ({
   columnItem: {
     marginBottom: theme.spacing(2),
   },
-  source: {
+  noSources: {
     padding: theme.spacing(2),
     display: "flex",
     flexDirection: "row",
+  },
+  sourceList: {
+    padding: "0",
   },
 }));
 
@@ -88,7 +91,11 @@ const DownloadXMLButton = ({ gcn_notice }) => {
   return (
     <div>
       <Chip size="small" label={gcn_notice.ivorn} key={gcn_notice.ivorn} />
-      <IconButton href={URL.createObjectURL(blob)} download={gcn_notice.ivorn}>
+      <IconButton
+        href={URL.createObjectURL(blob)}
+        download={gcn_notice.ivorn}
+        size="large"
+      >
         <GetAppIcon />
       </IconButton>
     </div>
@@ -102,7 +109,7 @@ DownloadXMLButton.propTypes = {
   }).isRequired,
 };
 
-const GcnEventSourcesPage = ({ route, sources }) => {
+const GcnEventSourcesPage = ({ route, sources, localizationName }) => {
   const classes = useStyles();
   const dispatch = useDispatch();
   const [sourcesRowsPerPage, setSourcesRowsPerPage] = useState(100);
@@ -111,6 +118,7 @@ const GcnEventSourcesPage = ({ route, sources }) => {
     dispatch(
       sourcesActions.fetchGcnEventSources(route.dateobs, {
         ...filterData,
+        localizationName,
         pageNumber: 1,
         numPerPage: sourcesRowsPerPage,
         sortBy: sortData.name,
@@ -128,6 +136,7 @@ const GcnEventSourcesPage = ({ route, sources }) => {
     setSourcesRowsPerPage(numPerPage);
     const data = {
       ...filterData,
+      localizationName,
       pageNumber,
       numPerPage,
     };
@@ -139,9 +148,9 @@ const GcnEventSourcesPage = ({ route, sources }) => {
   };
 
   // eslint-disable-next-line
-  if (sources?.sources.length === 0) {
+  if (!sources || sources?.sources?.length === 0) {
     return (
-      <div className={classes.source}>
+      <div className={classes.noSources}>
         <Typography variant="h5">Event sources</Typography>
         <br />
         <Typography variant="h5" align="center">
@@ -152,7 +161,7 @@ const GcnEventSourcesPage = ({ route, sources }) => {
   }
 
   return (
-    <div className={classes.source}>
+    <div className={classes.sourceList}>
       <SourceTable
         sources={sources.sources}
         title="Event Sources"
@@ -162,6 +171,7 @@ const GcnEventSourcesPage = ({ route, sources }) => {
         numPerPage={sources.numPerPage}
         sortingCallback={handleSourcesTableSorting}
         favoritesRemoveButton
+        hideTitle
       />
     </div>
   );
@@ -171,65 +181,64 @@ GcnEventSourcesPage.propTypes = {
   route: PropTypes.shape({
     dateobs: PropTypes.string,
   }).isRequired,
-  sources: PropTypes.arrayOf(
-    PropTypes.shape({
-      id: PropTypes.string,
-      ra: PropTypes.number,
-      dec: PropTypes.number,
-      origin: PropTypes.string,
-      alias: PropTypes.arrayOf(PropTypes.string),
-      redshift: PropTypes.number,
-      classifications: PropTypes.arrayOf(
-        PropTypes.shape({
-          id: PropTypes.number,
-          classification: PropTypes.string,
-          created_at: PropTypes.string,
-          groups: PropTypes.arrayOf(
-            PropTypes.shape({
-              id: PropTypes.number,
-              name: PropTypes.string,
-            })
-          ),
-        })
-      ),
-      recent_comments: PropTypes.arrayOf(PropTypes.shape({})),
-      altdata: PropTypes.shape({
-        tns: PropTypes.shape({
-          name: PropTypes.string,
+  sources: PropTypes.shape({
+    pageNumber: PropTypes.number,
+    totalMatches: PropTypes.number,
+    numPerPage: PropTypes.number,
+    sources: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.string,
+        ra: PropTypes.number,
+        dec: PropTypes.number,
+        origin: PropTypes.string,
+        alias: PropTypes.arrayOf(PropTypes.string),
+        redshift: PropTypes.number,
+        classifications: PropTypes.arrayOf(
+          PropTypes.shape({
+            id: PropTypes.number,
+            classification: PropTypes.string,
+            created_at: PropTypes.string,
+            groups: PropTypes.arrayOf(
+              PropTypes.shape({
+                id: PropTypes.number,
+                name: PropTypes.string,
+              })
+            ),
+          })
+        ),
+        recent_comments: PropTypes.arrayOf(PropTypes.shape({})),
+        altdata: PropTypes.shape({
+          tns: PropTypes.shape({
+            name: PropTypes.string,
+          }),
         }),
-      }),
-      spectrum_exists: PropTypes.bool,
-      last_detected_at: PropTypes.string,
-      last_detected_mag: PropTypes.number,
-      peak_detected_at: PropTypes.string,
-      peak_detected_mag: PropTypes.number,
-      groups: PropTypes.arrayOf(
-        PropTypes.shape({
-          id: PropTypes.number,
-          name: PropTypes.string,
-        })
-      ),
-    })
-  ).isRequired,
-  pageNumber: PropTypes.number,
-  totalMatches: PropTypes.number,
-  numPerPage: PropTypes.number,
-  data: PropTypes.shape({
-    length: PropTypes.number,
-    features: GeoPropTypes.FeatureCollection,
-  }).isRequired,
+        spectrum_exists: PropTypes.bool,
+        last_detected_at: PropTypes.string,
+        last_detected_mag: PropTypes.number,
+        peak_detected_at: PropTypes.string,
+        peak_detected_mag: PropTypes.number,
+        groups: PropTypes.arrayOf(
+          PropTypes.shape({
+            id: PropTypes.number,
+            name: PropTypes.string,
+          })
+        ),
+      })
+    ),
+  }),
+  localizationName: PropTypes.string.isRequired,
 };
 
 GcnEventSourcesPage.defaultProps = {
-  pageNumber: 1,
-  totalMatches: 0,
-  numPerPage: 10,
+  sources: null,
 };
 
 const GcnEventPage = ({ route }) => {
   const gcnEvent = useSelector((state) => state.gcnEvent);
   const dispatch = useDispatch();
   const styles = useStyles();
+  const [selectedLocalizationName, setSelectedLocalizationName] =
+    useState(null);
 
   const gcnEventSources = useSelector(
     (state) => state?.sources?.gcnEventSources
@@ -250,9 +259,9 @@ const GcnEventPage = ({ route }) => {
     dispatch(gcnEventActions.fetchGcnEvent(route.dateobs));
   }, [route, dispatch]);
 
-  useEffect(() => {
-    dispatch(sourcesActions.fetchGcnEventSources(route.dateobs));
-  }, [route, dispatch]);
+  // useEffect(() => {
+  //  dispatch(sourcesActions.fetchGcnEventSources(route.dateobs));
+  // }, [route, dispatch]);
 
   useEffect(() => {
     dispatch(observationsActions.fetchGcnEventObservations(route.dateobs));
@@ -268,7 +277,7 @@ const GcnEventPage = ({ route }) => {
 
   if (
     !gcnEvent ||
-    !gcnEventSources ||
+    // !gcnEventSources ||
     !gcnEventObservations ||
     !gcnEventGalaxies ||
     !gcnEventInstruments
@@ -288,7 +297,10 @@ const GcnEventPage = ({ route }) => {
             </AccordionSummary>
             <AccordionDetails>
               <div className={styles.gcnEventContainer}>
-                <GcnSelectionForm gcnEvent={gcnEvent} />
+                <GcnSelectionForm
+                  gcnEvent={gcnEvent}
+                  setSelectedLocalizationName={setSelectedLocalizationName}
+                />
               </div>
             </AccordionDetails>
           </Accordion>
@@ -310,7 +322,9 @@ const GcnEventPage = ({ route }) => {
                   gcnevent={gcnEvent}
                   action="createNew"
                 />
-                <ObservationPlanRequestLists gcnEvent={gcnEvent} />
+                {gcnEvent?.observationplan_requests?.length > 0 && (
+                  <ObservationPlanRequestLists gcnEvent={gcnEvent} />
+                )}
               </div>
             </AccordionDetails>
           </Accordion>
@@ -438,13 +452,16 @@ const GcnEventPage = ({ route }) => {
             </AccordionSummary>
             <AccordionDetails>
               {gcnEventSources?.sources.length === 0 ? (
-                <Typography variant="h5">None </Typography>
+                <Typography variant="h5">None</Typography>
               ) : (
-                <div className={styles.sourcesWithinLocalizationContainer}>
-                  <GcnEventSourcesPage
-                    route={route}
-                    sources={gcnEventSources}
-                  />
+                <div className={styles.gcnEventContainer}>
+                  {selectedLocalizationName && (
+                    <GcnEventSourcesPage
+                      route={route}
+                      sources={gcnEventSources}
+                      localizationName={selectedLocalizationName}
+                    />
+                  )}
                 </div>
               )}
             </AccordionDetails>
@@ -490,7 +507,7 @@ const GcnEventPage = ({ route }) => {
                 <Typography variant="h5">None</Typography>
               ) : (
                 <div className={styles.gcnEventContainer}>
-                  <GalaxyTable galaxies={gcnEventGalaxies.sources} />
+                  <GalaxyTable galaxies={gcnEventGalaxies.sources} hideTitle />
                 </div>
               )}
             </AccordionDetails>

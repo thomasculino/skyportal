@@ -3,14 +3,16 @@ import { useSelector, useDispatch } from "react-redux";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
 
-import Paper from "@material-ui/core/Paper";
-import Typography from "@material-ui/core/Typography";
-import DragHandleIcon from "@material-ui/icons/DragHandle";
-import Button from "@material-ui/core/Button";
 import { makeStyles } from "@material-ui/core/styles";
-import AddIcon from "@material-ui/icons/Add";
-import List from "@material-ui/core/List";
-import ListItem from "@material-ui/core/ListItem";
+
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import DragHandleIcon from "@mui/icons-material/DragHandle";
+import Button from "@mui/material/Button";
+
+import Select from "@material-ui/core/Select";
+import MenuItem from "@material-ui/core/MenuItem";
+import FormControl from "@material-ui/core/FormControl";
 
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -60,9 +62,6 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     flexDirection: "row",
     alignItems: "center",
-  },
-  listItem: {
-    width: "max-content",
   },
 }));
 
@@ -117,30 +116,51 @@ const RecentGcnEvents = ({ classes }) => {
     setGcnEventsSources(recentEventSources);
   }
 
+  const ITEM_HEIGHT = 48;
+  const MenuProps = {
+    PaperProps: {
+      style: {
+        maxHeight: ITEM_HEIGHT * 4.5,
+        width: 250,
+      },
+    },
+  };
+
   const sourcesAssociated = (gcnEvent, index) => {
     let recentGcnSourcesDefined = Object.entries(recentGcnSources)[index] ?? [];
     if (recentGcnSourcesDefined[1]) {
       recentGcnSourcesDefined = recentGcnSourcesDefined[1].sources;
     }
-    if (
-      recentGcnSourcesDefined.length > 0 &&
-      recentGcnSourcesDefined.length <= 2
-    ) {
+    if (recentGcnSourcesDefined.length > 0) {
       return (
         <div className={styles.eventSources}>
           {recentGcnSources !== "" &&
             Object.values(recentGcnSources).map((gcn, idx) => {
               if (idx === index) {
                 return (
-                  <List>
-                    {Object.entries(Object.values(gcn)[3]).map((item) => (
-                      <ListItem key={item[1].id}>
-                        <Link to={`/source/${item[1].id}`}>
-                          <Button color="primary">{item[1].id}</Button>
+                  <FormControl>
+                    <Select
+                      labelId="sources-within-the-localization-label"
+                      id="sources-within-the-localization"
+                      MenuProps={MenuProps}
+                      defaultValue="More Sources"
+                    >
+                      <MenuItem disabled value="More Sources">
+                        <em>More Sources</em>
+                      </MenuItem>
+                      {Object.entries(Object.values(gcn)[3]).map((source) => (
+                        <Link
+                          key={source[1].id}
+                          style={{ textDecoration: "none" }}
+                          to={`/source/${source[1].id}`}
+                        >
+                          <MenuItem key={source.id} value={source}>
+                            {source[1].id}
+                          </MenuItem>
                         </Link>
-                      </ListItem>
-                    ))}
-                  </List>
+                      ))}
+                    </Select>
+                  </FormControl>
                 );
               }
               return null;
@@ -148,34 +168,7 @@ const RecentGcnEvents = ({ classes }) => {
         </div>
       );
     }
-    return (
-      <div className={styles.eventSources}>
-        {recentGcnSources !== "" &&
-          Object.values(recentGcnSources).map((gcn, idx) => {
-            if (idx === index) {
-              return (
-                <List className={styles.eventSources}>
-                  {Object.entries(Object.values(gcn)[3])
-                    .slice(0, 2)
-                    .map((item) => (
-                      <ListItem key={item[1].id} className={styles.listItem}>
-                        <Link to={`/source/${item[1].id}`}>
-                          <Button color="primary">{item[1].id}</Button>
-                        </Link>
-                      </ListItem>
-                    ))}
-                  <Link to={`/gcn_events/${gcnEvent.dateobs}`}>
-                    <Button color="primary">
-                      <AddIcon />
-                    </Button>
-                  </Link>
-                </List>
-              );
-            }
-            return null;
-          })}
-      </div>
-    );
+    return null;
   };
 
   return (
@@ -183,7 +176,7 @@ const RecentGcnEvents = ({ classes }) => {
       <div className={classes.widgetPaperDiv}>
         <div className={styles.header}>
           <Typography variant="h6" display="inline">
-            Recent GCN Events
+            Recent GCN Events and their sources
           </Typography>
           <DragHandleIcon className={`${classes.widgetIcon} dragHandle`} />
           <div className={classes.widgetIcon}>
