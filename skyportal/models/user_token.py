@@ -17,7 +17,7 @@ from baselayer.app.models import (
 
 from .group import Group, GroupUser
 from .followup_request import FollowupRequest
-from .observation_plan import ObservationPlanRequest
+from .observation_plan import DefaultObservationPlanRequest, ObservationPlanRequest
 from .stream import Stream
 from .invitation import Invitation
 
@@ -122,6 +122,13 @@ User.photometry = relationship(
     passive_deletes=True,
     foreign_keys="Photometry.owner_id",
 )
+User.photometric_series = relationship(
+    'PhotometricSeries',
+    doc='PhotometricSeries uploaded by this User.',
+    back_populates='owner',
+    passive_deletes=True,
+    foreign_keys="PhotometricSeries.owner_id",
+)
 User.spectra = relationship(
     'Spectrum', doc='Spectra uploaded by this User.', back_populates='owner'
 )
@@ -145,6 +152,13 @@ User.comments_on_gcns = relationship(
     foreign_keys="CommentOnGCN.author_id",
     cascade="delete",
     passive_deletes=True,
+)
+User.default_observationplan_requests = relationship(
+    'DefaultObservationPlanRequest',
+    back_populates='requester',
+    passive_deletes=True,
+    doc="The default observation plan requests this User has made.",
+    foreign_keys=[DefaultObservationPlanRequest.requester_id],
 )
 User.comments_on_shifts = relationship(
     "CommentOnShift",
