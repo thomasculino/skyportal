@@ -90,14 +90,13 @@ const FollowUpAdvocates = ({ classes }) => {
   };
 
   // trying to convert CEST to UTC
-  // const convertToUTC = (date) => {
-  //   const date_UTC = new Date(date);
-  //   const date_UTC_ms = date_UTC.getTime() + date_UTC.getTimezoneOffset() * 60000;
-  //   const date_UTC_new = new Date(date_UTC_ms);
-  //   return date_UTC_new;
-  // }
-  // let auj = convertToUTC(currentShift?.start_date);
-  // console.log("auj", auj);
+  const convertToUTC = (date) => {
+    const date_UTC = new Date(date);
+    const date_UTC_ms =
+      date_UTC.getTime() + date_UTC.getTimezoneOffset() * 60000;
+    const date_UTC_new = new Date(date_UTC_ms);
+    return date_UTC_new;
+  };
 
   return (
     <Paper elevation={1} className={classes.widgetPaperFillSpace}>
@@ -115,10 +114,16 @@ const FollowUpAdvocates = ({ classes }) => {
                 Current Shift: {currentShift.name}
                 <br />
                 Start date:{" "}
-                {Date(currentShift.start_date, "ddd MMM D YYYY HH:mm ZZ")}
+                {dayjs(convertToUTC(currentShift?.start_date)).format(
+                  "MMMM Do YYYY, h:mm a"
+                )}{" "}
+                UTC
                 <br />
                 End date:{" "}
-                {Date(currentShift.end_date, "ddd MMM D YYYY HH:mm ZZ")}
+                {dayjs(convertToUTC(currentShift?.end_date)).format(
+                  "MMMM Do YYYY, h:mm a"
+                )}{" "}
+                UTC
                 <br />
                 Current Shifters:{" "}
                 {currentShift.shift_users?.map(
