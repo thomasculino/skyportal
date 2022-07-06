@@ -283,7 +283,7 @@ const SourceDesktop = ({ source }) => {
               onClick={() => setRightPaneVisible(true)}
               data-testid="show-right-pane-button"
             >
-              Show right panel
+              Show right pane
             </Button>
           )}
         </Box>

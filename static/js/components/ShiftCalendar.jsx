@@ -16,6 +16,7 @@ import makeStyles from "@mui/styles/makeStyles";
 import { showNotification } from "baselayer/components/Notifications";
 import GroupsSelect from "./GroupsSelect";
 import * as shiftActions from "../ducks/shift";
+import * as shiftsActions from "../ducks/shifts";
 
 /* eslint-disable react/prop-types */
 
@@ -174,7 +175,7 @@ function setCurrentShift({ event, setShow }) {
   dispatch({ type: "skyportal/CURRENT_SHIFT", data: event });
   dispatch({ type: "skyportal/CURRENT_SHIFT_SELECTED_USERS", data: [] });
   dispatch(
-    shiftActions.getShiftsSummary({
+    shiftsActions.getShiftsSummary({
       shiftID: event.id,
     })
   );

@@ -11,7 +11,7 @@ import MyCalendar from "./ShiftCalendar";
 import { CurrentShiftMenu, CommentOnShift } from "./ShiftManagement";
 import ShiftSummary from "./ShiftSummary";
 
-import { getShiftsSummary } from "../ducks/shift";
+import { getShiftsSummary } from "../ducks/shifts";
 
 const useStyles = makeStyles((theme) => ({
   root: {

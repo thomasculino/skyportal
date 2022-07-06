@@ -13,6 +13,7 @@ from ...models import (
     Token,
     UserNotification,
     GcnEvent,
+    CommentOnGCN,
 )
 
 
@@ -692,16 +693,49 @@ class ShiftSummary(BaseHandler):
                         gcn["dateobs"] >= shift["start_date"]
                         and gcn["dateobs"] <= shift["end_date"]
                     ):
+                        commentsOnGcn = (
+                            CommentOnGCN.query_records_accessible_by(
+                                self.current_user,
+                                options=[
+                                    joinedload(CommentOnGCN.author),
+                                    joinedload(CommentOnGCN.groups),
+                                ],
+                                mode="read",
+                            )
+                            .filter(CommentOnGCN.gcn_id == gcn['id'])
+                            .all()
+                        )
                         if gcn["id"] not in [
                             gcn["id"] for gcn in gcn_added_during_shifts
                         ]:
                             gcn['shift_ids'] = [shift['id']]
+                            gcn['comments'] = [commentsOnGcn]
+                            gcn["comments"] = sorted(
+                                (
+                                    {
+                                        **{
+                                            k: v
+                                            for k, v in c.to_dict().items()
+                                            if k != "attachment_bytes"
+                                        },
+                                        "author": {
+                                            **c.author.to_dict(),
+                                            "gravatar_url": c.author.gravatar_url,
+                                        },
+                                    }
+                                    for c in commentsOnGcn
+                                ),
+                                key=lambda x: x["created_at"],
+                                reverse=True,
+                            )
+
                             gcn_added_during_shifts.append(gcn)
 
                         else:
                             for gcn_added in gcn_added_during_shifts:
                                 if gcn_added['id'] == gcn['id']:
                                     gcn_added['shift_ids'].append(shift['id'])
+                                    gcn_added['comments'].append(commentsOnGcn)
                                     break
             report['gcns'] = {'total': len(gcn_added_during_shifts)}
             report['gcns']['data'] = gcn_added_during_shifts

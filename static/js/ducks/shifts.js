@@ -14,6 +14,10 @@ const UPDATE_SHIFT_USER = "skyportal/UPDATE_SHIFT_USER";
 
 const DELETE_SHIFT_USER = "skyportal/DELETE_SHIFT_USER";
 
+const FETCH_SHIFT_SUMMARY = "skyportal/FETCH_SHIFT_SUMMARY";
+
+const FETCH_SHIFT_SUMMARY_OK = "skyportal/FETCH_SHIFT_SUMMARY_OK";
+
 function datestringToDate(shiftList) {
   const newShiftList = [...shiftList];
   for (let i = 0; i < shiftList.length; i += 1) {
@@ -53,6 +57,17 @@ export function deleteShiftUser({ userID, shift_id }) {
   );
 }
 
+export function getShiftsSummary({ shiftID, startDate, endDate }) {
+  let data = null;
+  let url = `/api/shifts/summary`;
+  if (startDate && endDate) {
+    data = { startDate, endDate };
+  } else if (shiftID) {
+    url = `/api/shifts/summary/${shiftID}`;
+  }
+  return API.GET(url, FETCH_SHIFT_SUMMARY, data);
+}
+
 // Websocket message handler
 messageHandler.add((actionType, payload, dispatch) => {
   if (actionType === REFRESH_SHIFTS) {
@@ -60,13 +75,20 @@ messageHandler.add((actionType, payload, dispatch) => {
   }
 });
 
-const reducer = (state = { shiftList: [] }, action) => {
+const reducer = (state = { shiftList: [], shiftsSummary: [] }, action) => {
   switch (action.type) {
     case FETCH_SHIFTS_OK: {
       const shiftList = datestringToDate(action.data);
       return {
         ...state,
         shiftList,
+      };
+    }
+    case FETCH_SHIFT_SUMMARY_OK: {
+      const shiftsSummary = action.data;
+      return {
+        ...state,
+        shiftsSummary,
       };
     }
     default:

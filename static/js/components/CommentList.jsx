@@ -27,7 +27,7 @@ const useStyles = makeStyles(() => ({
   commentsList: {
     marginTop: "1rem",
     overflowY: "scroll",
-    maxHeight: "350px",
+    maxHeight: "17em",
   },
   comment: {
     fontSize: "90%",
@@ -177,6 +177,8 @@ const CommentList = ({
   spectrumID = null,
   gcnEventID = null,
   includeCommentsOnAllResourceTypes = true,
+  includeCommentEntry = true,
+  comments = null,
 }) => {
   const styles = useStyles();
   const [hoverID, setHoverID] = useState(null);
@@ -247,41 +249,44 @@ const CommentList = ({
     );
   };
 
-  let comments = null;
   let specComments = null;
 
-  if (associatedResourceType === "object") {
-    comments = obj.comments;
-    if (
-      includeCommentsOnAllResourceTypes &&
-      typeof spectra === "object" &&
-      spectra !== null &&
-      objID in spectra
-    ) {
-      specComments = spectra[objID]?.map((spec) => spec.comments)?.flat();
+  if (!comments) {
+    if (associatedResourceType === "object") {
+      comments = obj.comments;
+      if (
+        includeCommentsOnAllResourceTypes &&
+        typeof spectra === "object" &&
+        spectra !== null &&
+        objID in spectra
+      ) {
+        specComments = spectra[objID]?.map((spec) => spec.comments)?.flat();
+      }
+      if (comments !== null && specComments !== null) {
+        comments = specComments.concat(comments);
+        comments.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+      }
+    } else if (associatedResourceType === "spectra") {
+      if (spectrumID === null) {
+        throw new Error("Must specify a spectrumID for comments on spectra");
+      }
+      const spectrum = spectra[objID].find((spec) => spec.id === spectrumID);
+      comments = spectrum?.comments;
+    } else if (associatedResourceType === "gcn_event") {
+      if (gcnEventID === null) {
+        throw new Error("Must specify a gcnEventID for comments on gcnEvent");
+      }
+      comments = gcnEvent.comments;
+    } else if (associatedResourceType === "shift") {
+      if (shift_id === null) {
+        throw new Error("Must specify a shiftID for comments on shift");
+      }
+      comments = currentShift?.comments;
+    } else {
+      throw new Error(
+        `Illegal input ${associatedResourceType} to CommentList. `
+      );
     }
-    if (comments !== null && specComments !== null) {
-      comments = specComments.concat(comments);
-      comments.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-    }
-  } else if (associatedResourceType === "spectra") {
-    if (spectrumID === null) {
-      throw new Error("Must specify a spectrumID for comments on spectra");
-    }
-    const spectrum = spectra[objID].find((spec) => spec.id === spectrumID);
-    comments = spectrum?.comments;
-  } else if (associatedResourceType === "gcn_event") {
-    if (gcnEventID === null) {
-      throw new Error("Must specify a gcnEventID for comments on gcnEvent");
-    }
-    comments = gcnEvent.comments;
-  } else if (associatedResourceType === "shift") {
-    if (shift_id === null) {
-      throw new Error("Must specify a shiftID for comments on shift");
-    }
-    comments = currentShift?.comments;
-  } else {
-    throw new Error(`Illegal input ${associatedResourceType} to CommentList. `);
   }
 
   comments = comments || [];
@@ -352,22 +357,26 @@ const CommentList = ({
           )
         )}
       </div>
-      {permissions.indexOf("Comment") >= 0 &&
-        objID &&
-        (associatedResourceType === "object" ||
-          associatedResourceType === "spectra") && (
-          <CommentEntry addComment={addComment} />
-        )}
-      {permissions.indexOf("Comment") >= 0 &&
-        gcnEventID &&
-        associatedResourceType === "gcn_event" && (
-          <CommentEntry addComment={addGcnEventComment} />
-        )}
-      {permissions.indexOf("Comment") >= 0 &&
-        shift_id &&
-        associatedResourceType === "shift" && (
-          <CommentEntry addComment={addShiftComment} />
-        )}
+      {includeCommentEntry && (
+        <>
+          {permissions.indexOf("Comment") >= 0 &&
+            objID &&
+            (associatedResourceType === "object" ||
+              associatedResourceType === "spectra") && (
+              <CommentEntry addComment={addComment} />
+            )}
+          {permissions.indexOf("Comment") >= 0 &&
+            gcnEventID &&
+            associatedResourceType === "gcn_event" && (
+              <CommentEntry addComment={addGcnEventComment} />
+            )}
+          {permissions.indexOf("Comment") >= 0 &&
+            shift_id &&
+            associatedResourceType === "shift" && (
+              <CommentEntry addComment={addShiftComment} />
+            )}
+        </>
+      )}
     </div>
   );
 };
@@ -379,6 +388,8 @@ CommentList.propTypes = {
   associatedResourceType: PropTypes.string,
   spectrumID: PropTypes.number,
   includeCommentsOnAllResourceTypes: PropTypes.bool,
+  includeCommentEntry: PropTypes.bool,
+  comments: PropTypes.arrayOf(PropTypes.shape({})),
 };
 
 CommentList.defaultProps = {
@@ -388,6 +399,8 @@ CommentList.defaultProps = {
   associatedResourceType: "object",
   spectrumID: null,
   includeCommentsOnAllResourceTypes: true,
+  includeCommentEntry: true,
+  comments: null,
 };
 
 export default CommentList;

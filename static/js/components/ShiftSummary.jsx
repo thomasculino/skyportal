@@ -11,6 +11,7 @@ import {
   Tooltip,
   List,
   ListItem,
+  Grid,
 } from "@mui/material";
 import { showNotification } from "baselayer/components/Notifications";
 import {
@@ -18,7 +19,8 @@ import {
   ExpandMore,
   ExpandLess,
 } from "@mui/icons-material";
-import * as shiftActions from "../ducks/shift";
+import CommentList from "./CommentList";
+import * as shiftsActions from "../ducks/shifts";
 import SourceTable from "./SourceTable";
 import * as sourcesActions from "../ducks/sources";
 
@@ -57,6 +59,156 @@ const useStyles = makeStyles((theme) => ({
     fontSize: "1rem",
     maxWidth: "60rem",
   },
+  commentsContainer: {
+    width: "100%",
+  },
+  commentsList: {
+    marginTop: "1rem",
+    overflowY: "scroll",
+    maxHeight: "350px",
+  },
+  comment: {
+    fontSize: "90%",
+    display: "flex",
+    flexDirection: "row",
+    padding: "0.125rem",
+    margin: "0 0.125rem 0.125rem 0",
+    borderRadius: "1rem",
+    "&:hover": {
+      backgroundColor: "#e0e0e0",
+    },
+    "& .commentDelete": {
+      "&:hover": {
+        color: "#e63946",
+      },
+    },
+  },
+  commentDark: {
+    fontSize: "90%",
+    display: "flex",
+    flexDirection: "row",
+    padding: "0.125rem",
+    margin: "0 0.125rem 0.125rem 0",
+    borderRadius: "1rem",
+    "&:hover": {
+      backgroundColor: "#3a3a3a",
+    },
+    "& .commentDelete": {
+      color: "#b1dae9",
+      "&:hover": {
+        color: "#e63946",
+      },
+    },
+  },
+  commentContent: {
+    display: "flex",
+    flexFlow: "column nowrap",
+    padding: "0.3125rem 0.625rem 0.3125rem 0.875rem",
+    borderRadius: "15px",
+    width: "100%",
+  },
+  spacer: {
+    width: "20px",
+    padding: "0 10px",
+  },
+  commentHeader: {
+    display: "flex",
+    alignItems: "center",
+  },
+  commentHeaderContent: {
+    width: "70%",
+  },
+  commentTime: {
+    color: "gray",
+    fontSize: "80%",
+    marginRight: "1em",
+  },
+  commentMessage: {
+    maxWidth: "35em",
+    "& > p": {
+      margin: "0",
+    },
+    wordWrap: "break-word",
+  },
+  commentMessageShift: {
+    maxWidth: "47em",
+    "& > p": {
+      margin: "0",
+    },
+    wordWrap: "break-word",
+  },
+  compactCommentMessage: {
+    maxWidth: "34em",
+    "& > p": {
+      margin: "0",
+    },
+    wordWrap: "break-word",
+  },
+  compactCommentMessageShift: {
+    maxWidth: "44em",
+    "& > p": {
+      margin: "0",
+    },
+    wordWrap: "break-word",
+  },
+  commentUserName: {
+    fontWeight: "bold",
+    marginRight: "0.5em",
+    whiteSpace: "nowrap",
+    color: "#76aace",
+  },
+  commentUserDomain: {
+    color: "lightgray",
+    fontSize: "80%",
+    paddingRight: "0.5em",
+  },
+  commentUserAvatar: {
+    display: "block",
+    margin: "0.5em",
+  },
+  commentUserGroup: {
+    display: "inline-block",
+    "& > svg": {
+      fontSize: "1rem",
+    },
+  },
+  wrap: {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    minHeight: "27px",
+    maxWidth: "25em",
+  },
+  compactContainer: {
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    minHeight: "25px",
+    margin: "0 15px",
+    width: "100%",
+  },
+  compactWrap: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    padding: "0 5px",
+  },
+  compactButtons: {
+    display: "flex",
+    alignItems: "center",
+  },
+  defaultCommentDelete: {
+    display: "flex",
+    justifyContent: "end",
+    width: "30%",
+  },
+  expandDetails: {
+    maxHeight: "20em",
+  },
 }));
 
 const ShiftSummary = () => {
@@ -64,10 +216,10 @@ const ShiftSummary = () => {
   const dispatch = useDispatch();
   const [selectedGCN, setSelectedGCN] = useState(null);
   const sources = useSelector((state) => state?.sources?.gcnEventSources);
-
   const [sourcesRowsPerPage, setSourcesRowsPerPage] = useState(100);
+
   // return a react json schema form where the user can select a start date and end date, and then click submit to get  json document that summarizes the activity during shifts between the start and end dates
-  const shiftsSummary = useSelector((state) => state.shift.shiftsSummary);
+  const shiftsSummary = useSelector((state) => state.shifts.shiftsSummary);
 
   const defaultStartDate = dayjs()
     .subtract(1, "day")
@@ -118,7 +270,7 @@ const ShiftSummary = () => {
       .replace(".000Z", "");
     if (formData.end_date && formData.start_date) {
       dispatch(
-        shiftActions.getShiftsSummary({
+        shiftsActions.getShiftsSummary({
           startDate: formData.start_date,
           endDate: formData.end_date,
         })
@@ -275,8 +427,27 @@ const ShiftSummary = () => {
               </div>
               {selectedGCN === gcn.id ? <ExpandLess /> : <ExpandMore />}
             </ListItem>
-            <Collapse in={selectedGCN === gcn.id} timeout="auto" unmountOnExit>
-              {displaySourcesInGCN(gcn.dateobs, sources)}
+            <Collapse
+              in={selectedGCN === gcn.id}
+              timeout="auto"
+              unmountOnExit
+              className={classes.expandDetails}
+            >
+              <Grid container spacing={3} className={classes.expandDetails}>
+                <Grid item md={6} sm={12} className={classes.expandDetails}>
+                  {displaySourcesInGCN(gcn.dateobs, sources)}
+                </Grid>
+                <Grid item md={6} sm={12} className={classes.expandDetails}>
+                  {gcn.comments.length > 0 ? (
+                    <CommentList
+                      includeCommentEntry={false}
+                      comments={gcn.comments}
+                    />
+                  ) : (
+                    <div>No comments</div>
+                  )}
+                </Grid>
+              </Grid>
             </Collapse>
             <Divider />
           </div>
@@ -320,6 +491,11 @@ const ShiftSummary = () => {
           {displayShiftsList(shiftsSummary.shifts.data)}
         </Paper>
       )}
+      {/* {shiftsSummary?.sources && (
+        <Paper className={classes.content}>
+          {displayShiftsGCN(shiftsSummary.shifts.data, shiftsSummary.sources)}
+        </Paper>
+      )} */}
       {shiftsSummary?.gcns && (
         <Paper className={classes.content}>
           {displayShiftsGCN(shiftsSummary.shifts.data, shiftsSummary.gcns.data)}
