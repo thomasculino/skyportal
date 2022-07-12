@@ -124,6 +124,8 @@ app:
       component: TelescopePage
     - path: "/instruments"
       component: InstrumentPage
+    - path: "/services"
+      component: AnalysisServicePage
     - path: "/shifts"
       component: ShiftNoId
     - path: "/shifts/:id"
@@ -194,6 +196,10 @@ app:
         - name: Galaxies
           icon: TornadoOutlined
           url: /galaxies
+
+        - name: Analysis Services
+          icon: SentimentSatisfied
+          url: /services
 
     - name: Admin
       permissions: ["Manage users", "System admin"]
@@ -521,6 +527,7 @@ cross_match:
     radius: 2.0
     limmag: 20.5
     number: 1
+
 
 # define the additional passbands that are not in SNCosmo
 # (https://sncosmo.readthedocs.io/en/stable/bandpass-list.html)
