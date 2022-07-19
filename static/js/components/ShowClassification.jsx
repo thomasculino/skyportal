@@ -9,7 +9,6 @@ export const useStyles = makeStyles((theme) => ({
   chip: {
     margin: theme.spacing(0.5),
     fontSize: "1.2rem",
-    fontWeight: "bold",
   },
 }));
 
