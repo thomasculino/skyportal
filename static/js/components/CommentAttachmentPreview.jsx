@@ -158,9 +158,15 @@ const CommentAttachmentPreview = ({
   };
 
   const fileType = filename.includes(".") ? filename.split(".").pop() : "";
-  const supportedType = ["png", "jpg", "jpeg", "pdf", "gif", "json"].includes(
-    fileType.toLowerCase()
-  );
+  const supportedType = [
+    "png",
+    "jpg",
+    "jpeg",
+    "pdf",
+    "gif",
+    "json",
+    "fz",
+  ].includes(fileType.toLowerCase());
 
   let jsonFile = {};
   try {
@@ -173,7 +179,10 @@ const CommentAttachmentPreview = ({
     };
   }
 
-  if (fileType.toLowerCase() === "json" && !isCached && open) {
+  if (
+    fileType.toLowerCase() === "json" ||
+    (fileType.toLowerCase() === "fz" && !isCached && open)
+  ) {
     if (associatedResourceType === "sources") {
       dispatch(sourceActions.getCommentAttachmentPreview(objectID, commentId));
     } else if (associatedResourceType === "spectra") {

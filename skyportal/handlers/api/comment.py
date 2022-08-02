@@ -291,16 +291,28 @@ class CommentHandler(BaseHandler):
         data = self.get_json()
 
         comment_text = data.get("text")
-
         if 'attachment' in data:
             if (
                 isinstance(data['attachment'], dict)
                 and 'body' in data['attachment']
                 and 'name' in data['attachment']
             ):
-                attachment_bytes = str.encode(
-                    data['attachment']['body'].split('base64,')[-1]
-                )
+                print("name:", data['attachment']['name'])
+                if (
+                    data['attachment']['name'].split(".").pop()
+                    if "." in data['attachment']['name']
+                    else ""
+                ) == "fz":
+                    print("fz")
+                    temp = base64.b64decode(data['attachment']['body'].split(",")[1])
+                    # temp = temp.decode("utf-8")
+                    # print("temp:", type(temp))
+                    attachment_bytes = bytearray(temp)
+                    # attachment_bytes = bytearray.decode(image_data)
+                else:
+                    attachment_bytes = str.encode(
+                        data['attachment']['body'].split('base64,')[-1]
+                    )
                 attachment_name = data['attachment']['name']
             else:
                 return self.error("Malformed comment attachment")
