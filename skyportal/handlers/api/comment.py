@@ -19,6 +19,12 @@ from ...models import (
     UserNotification,
     Token,
 )
+from matplotlib import pyplot as plt
+import tempfile
+import numpy as np
+from astropy.io import fits
+from astropy.visualization.stretch import SinhStretch
+from astropy.visualization import ImageNormalize, ZScaleInterval
 
 
 def users_mentioned(text, session):
@@ -207,12 +213,32 @@ class CommentHandler(BaseHandler):
         if not comment.attachment_bytes:
             return self.success(data=comment)
         else:
+            with tempfile.NamedTemporaryFile(
+                suffix=".fits.fz", mode="wb", delete=False
+            ) as f:
+                image_data = base64.b64decode(comment.attachment_bytes)
+                f.write(image_data)
+                f.flush()
+                hdul = fits.open(f.name)
+                image_data = hdul[1].data.astype(np.double)
+                # Transforms normalized values [0,1] to [-1,1] before stretch and then back
+                interval = ZScaleInterval()
+                vmin, vmax = interval.get_limits(image_data)
+                # Create an ImageNormalize object using a SqrtStretch object
+                norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=SinhStretch())
+                plt.imshow(image_data, origin='lower', norm=norm, cmap='gray')
+                plt.colorbar()
+                plt.savefig(f'{f.name}.png')
+            with open(f'{f.name}.png', 'rb') as f:
+                image_data = base64.b64encode(f.read()).decode()
+
             return self.success(
                 data={
                     "commentId": int(comment_id),
                     "text": comment.text,
-                    "attachment": base64.b64decode(comment.attachment_bytes).decode(),
+                    "attachment": image_data,
                     "attachment_name": str(comment.attachment_name),
+                    "attachment_preview": "test.png",
                 }
             )
 
@@ -297,22 +323,10 @@ class CommentHandler(BaseHandler):
                 and 'body' in data['attachment']
                 and 'name' in data['attachment']
             ):
-                print("name:", data['attachment']['name'])
-                if (
-                    data['attachment']['name'].split(".").pop()
-                    if "." in data['attachment']['name']
-                    else ""
-                ) == "fz":
-                    print("fz")
-                    temp = base64.b64decode(data['attachment']['body'].split(",")[1])
-                    # temp = temp.decode("utf-8")
-                    # print("temp:", type(temp))
-                    attachment_bytes = bytearray(temp)
-                    # attachment_bytes = bytearray.decode(image_data)
-                else:
-                    attachment_bytes = str.encode(
-                        data['attachment']['body'].split('base64,')[-1]
-                    )
+
+                attachment_bytes = str.encode(
+                    data['attachment']['body'].split('base64,')[-1]
+                )
                 attachment_name = data['attachment']['name']
             else:
                 return self.error("Malformed comment attachment")
@@ -885,16 +899,54 @@ class CommentAttachmentHandler(BaseHandler):
             return self.error('Comment has no attachment')
 
         if download:
+            with tempfile.NamedTemporaryFile(
+                suffix=".fits.fz", mode="wb", delete=False
+            ) as f:
+                image_data = base64.b64decode(comment.attachment_bytes)
+                f.write(image_data)
+                f.flush()
+                hdul = fits.open(f.name)
+                image_data = hdul[1].data.astype(np.double)
+                # Transforms normalized values [0,1] to [-1,1] before stretch and then back
+                interval = ZScaleInterval()
+                vmin, vmax = interval.get_limits(image_data)
+                # Create an ImageNormalize object using a SqrtStretch object
+                norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=SinhStretch())
+                plt.imshow(image_data, origin='lower', norm=norm, cmap='gray')
+                plt.colorbar()
+                plt.savefig(f'{f.name}.png')
+            with open(f'{f.name}.png', 'rb') as f:
+                image_data = f.read()
+                print(len(image_data))
+                print(type(image_data))
             self.set_header(
                 "Content-Disposition",
-                "attachment; " f"filename={comment.attachment_name}",
+                "attachment; " f"filename={comment.attachment_name}.png",
             )
             self.set_header("Content-type", "application/octet-stream")
-            self.write(base64.b64decode(comment.attachment_bytes))
+            self.write(image_data)
         else:
+            with tempfile.NamedTemporaryFile(
+                suffix=".fits.fz", mode="wb", delete=False
+            ) as f:
+                image_data = base64.b64decode(comment.attachment_bytes)
+                f.write(image_data)
+                f.flush()
+                hdul = fits.open(f.name)
+                image_data = hdul[1].data.astype(np.double)
+                # Transforms normalized values [0,1] to [-1,1] before stretch and then back
+                interval = ZScaleInterval()
+                vmin, vmax = interval.get_limits(image_data)
+                # Create an ImageNormalize object using a SqrtStretch object
+                norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=SinhStretch())
+                plt.imshow(image_data, origin='lower', norm=norm, cmap='gray')
+                plt.colorbar()
+                plt.savefig(f'{f.name}.png')
+            with open(f'{f.name}.png', 'rb') as f:
+                image_data = f.read()
             return self.success(
                 data={
                     "commentId": int(comment_id),
-                    "attachment": base64.b64decode(comment.attachment_bytes).decode(),
+                    "attachment": image_data,
                 }
             )
