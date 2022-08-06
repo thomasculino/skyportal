@@ -16,7 +16,21 @@ from baselayer.app.models import (
 )
 
 from .group import accessible_by_groups_members
+import os
+from baselayer.app.env import load_env
+from baselayer.log import make_log
+from pathlib import Path
+from sqlalchemy import event
+import re
 
+RE_SLASHES = re.compile(r'^[\w_\-\+\/\\]*$')
+RE_NO_SLASHES = re.compile(r'^[\w_\-\+]*$')
+
+MAX_FILEPATH_LENGTH = 255
+
+_, cfg = load_env()
+
+log = make_log('models/comments')
 
 """
 NOTE ON ADDING NEW COMMENT TYPES:
@@ -45,6 +59,12 @@ class CommentMixin:
         sa.types.LargeBinary,
         nullable=True,
         doc="Binary representation of the attachment.",
+    )
+
+    _full_name = sa.Column(
+        sa.String,
+        nullable=True,
+        doc='full name of the file path where the data is saved.',
     )
 
     origin = sa.Column(sa.String, nullable=True, doc='Comment origin.')
@@ -101,6 +121,77 @@ class CommentMixin:
             field: getattr(self.author, field)
             for field in ('username', 'first_name', 'last_name', 'gravatar_url')
         }
+
+    def get_data_path(self):
+        """
+        Get the path to the associated analysis data.
+        """
+        return self._full_name
+
+    def save_data(self, filename, file_data):
+        """
+        Save the associated analysis data to disk.
+        """
+
+        # there's a default value but it is best to provide a full path in the config
+        root_folder = cfg.get('comments_folder', 'comments_data')
+
+        # the filename can have alphanumeric, underscores, + or -
+        self.check_path_string(str(self.id))
+
+        # make sure to replace windows style slashes
+        subfolder = str(self.id).replace("\\", "/")
+
+        path = os.path.join(root_folder, subfolder)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        full_name = os.path.join(path, filename)
+
+        if len(full_name) > MAX_FILEPATH_LENGTH:
+            raise ValueError(
+                f'Full path to file {full_name} is longer than {MAX_FILEPATH_LENGTH} characters.'
+            )
+
+        with open(full_name, 'wb') as f:
+            f.write(file_data)
+        self.filename = full_name
+
+        # persist the filename
+        self._full_name = full_name
+
+    def delete_data(self):
+        """
+        Delete the associated data from disk
+        """
+        if self._full_name:
+            if os.path.exists(self._full_name):
+                # remove the file and other files in the same directory
+                os.remove(self._full_name)
+            parent_dir = Path(self._full_name).parent
+            try:
+                if parent_dir.is_dir():
+                    for file_name in os.listdir(parent_dir):
+                        file = str(parent_dir) + '/' + file_name
+                        print("delete_data file", file)
+                        if os.path.isfile(file):
+                            os.remove(file)
+                    parent_dir.rmdir()
+            except OSError:
+                pass
+
+        # reset the filename
+        self._full_name = None
+
+    @staticmethod
+    def check_path_string(string, allow_slashes=False):
+        if allow_slashes:
+            reg = RE_SLASHES
+        else:
+            reg = RE_NO_SLASHES
+
+        if not reg.match(string):
+            raise ValueError(f'Illegal characters in string "{string}". ')
 
 
 class Comment(Base, CommentMixin):
@@ -215,3 +306,12 @@ class CommentOnShift(Base, CommentMixin):
         back_populates='comments',
         doc="The Shift referred to by this comment.",
     )
+
+
+@event.listens_for(Comment, 'after_delete')
+@event.listens_for(CommentOnSpectrum, 'after_delete')
+@event.listens_for(CommentOnGCN, 'after_delete')
+@event.listens_for(CommentOnShift, 'after_delete')
+def delete_comment_data_from_disk(mapper, connection, target):
+    log(f'Deleting analysis data for analysis id={target.id}')
+    target.delete_data()

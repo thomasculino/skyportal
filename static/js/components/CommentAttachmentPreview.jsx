@@ -166,6 +166,7 @@ const CommentAttachmentPreview = ({
     "gif",
     "json",
     "fz",
+    "fits",
   ].includes(fileType.toLowerCase());
 
   let jsonFile = {};
@@ -247,7 +248,10 @@ const CommentAttachmentPreview = ({
                 // preview with no way to edit it without losing resolution due
                 // to hard-coded in-line styling, so use the FilePreviewer
                 // component for PDF
-                <FilePreviewer file={{ url }} hideControls />
+                <FilePreviewer
+                  file={{ url: `${url}?download=false&preview=true` }}
+                  hideControls
+                />
               )}
               {supportedType && fileType === "json" && (
                 <ReactJson
@@ -257,7 +261,10 @@ const CommentAttachmentPreview = ({
                 />
               )}
               {supportedType && fileType !== "pdf" && fileType !== "json" && (
-                <FilePreviewerThumbnail file={{ url }} hideControls />
+                <FilePreviewerThumbnail
+                  file={{ url: `${url}?download=false&preview=true` }}
+                  hideControls
+                />
               )}
               {!supportedType && (
                 <div className={classes.unsupportedType}>
