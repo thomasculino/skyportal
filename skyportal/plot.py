@@ -1373,15 +1373,17 @@ def make_period_controls(
         )
     )
     # a way to select the period
-    period_selection.js_on_click(
+    period_selection.js_on_change(
+        'active',
         CustomJS(
             args={'textinput': period_textinput, 'periods': period_list},
             code="""
             textinput.value = parseFloat(periods[this.active]).toFixed(9);
             """,
-        )
+        ),
     )
-    phase_selection.js_on_click(
+    phase_selection.js_on_change(
+        'active',
         CustomJS(
             args={
                 'textinput': period_textinput,
@@ -1395,7 +1397,7 @@ def make_period_controls(
                     os.path.dirname(__file__), '../static/js/plotjs', 'foldphase.js'
                 )
             ).read(),
-        )
+        ),
     )
     if device == "mobile_portrait":
         period_controls = column(
@@ -2269,7 +2271,7 @@ def make_spectrum_layout(
             )
         ).read(),
     )
-    smooth_checkbox.js_on_click(smooth_callback)
+    smooth_checkbox.js_on_change('value', smooth_callback)
     smooth_input.js_on_change('value', smooth_callback)
     smooth_slider.js_on_change(
         'value',
@@ -2456,7 +2458,7 @@ def make_spectrum_layout(
                     }}
                 """,
         )
-        column_checkboxes.js_on_click(callback_toggle_lines)
+        column_checkboxes.js_on_change('value', callback_toggle_lines)
 
     hide_all_spectra = Button(
         name="Hide All Spectra", label="Hide All Spectra", width_policy="min"
