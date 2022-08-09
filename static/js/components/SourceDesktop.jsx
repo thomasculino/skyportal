@@ -44,8 +44,10 @@ import PhotometryTable from "./PhotometryTable";
 import FavoritesButton from "./FavoritesButton";
 import SourceAnnotationButtons from "./SourceAnnotationButtons";
 import TNSATForm from "./TNSATForm";
+import Reminders from "./Reminders";
 
 import * as spectraActions from "../ducks/spectra";
+import * as sourceActions from "../ducks/source";
 
 const VegaHR = React.lazy(() => import("./VegaHR"));
 
@@ -232,8 +234,11 @@ const SourceDesktop = ({ source }) => {
   }
   const specIDs = spectra ? spectra.map((s) => s.id).join(",") : "";
 
+  const associatedGCNs = useSelector((state) => state.source.associatedGCNs);
+
   useEffect(() => {
     dispatch(spectraActions.fetchSourceSpectra(source.id));
+    dispatch(sourceActions.fetchAssociatedGCNs(source.id));
   }, [source.id, dispatch]);
 
   const z_round = source.redshift_error
@@ -293,6 +298,18 @@ const SourceDesktop = ({ source }) => {
           <div className={classes.infoLine}>
             <b>Aliases: &nbsp;</b>
             <div key="aliases"> {source.alias.join(", ")} </div>
+          </div>
+        ) : null}
+        {associatedGCNs?.length > 0 ? (
+          <div className={classes.infoLine}>
+            <b>Associated to: &nbsp;</b>
+            <div key="associated_gcns">
+              {associatedGCNs.map((dateobs) => (
+                <a key={`${dateobs}`} href={`/gcn_events/${dateobs}`}>
+                  {dateobs}
+                </a>
+              ))}
+            </div>
           </div>
         ) : null}
         <div className={classes.sourceInfo}>
@@ -797,6 +814,9 @@ const SourceDesktop = ({ source }) => {
               </AccordionSummary>
               <AccordionDetails>
                 <SourceNotification sourceId={source.id} />
+              </AccordionDetails>
+              <AccordionDetails>
+                <Reminders resourceId={source.id} resourceType="source" />
               </AccordionDetails>
             </Accordion>
           </div>

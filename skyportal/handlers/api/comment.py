@@ -336,6 +336,10 @@ class CommentHandler(BaseHandler):
                         data['attachment']['body'].split('base64,')[-1]
                     )
             else:
+                    data_to_disk = base64.b64decode(
+                        data['attachment']['body'].split('base64,')[-1]
+                    )
+            else:
                 return self.error("Malformed comment attachment")
 
         author = self.associated_user_object
@@ -755,31 +759,31 @@ class CommentHandler(BaseHandler):
                 f'Comment resource ID does not match resource ID given in path ({resource_id})'
             )
 
-        DBSession().delete(c)
-        self.verify_and_commit()
+            session.delete(c)
+            session.commit()
 
-        if hasattr(c, 'obj'):  # comment on object, or object related resources
-            self.push_all(
-                action='skyportal/REFRESH_SOURCE',
-                payload={'obj_key': obj_key},
-            )
+            if hasattr(c, 'obj'):  # comment on object, or object related resources
+                self.push_all(
+                    action='skyportal/REFRESH_SOURCE',
+                    payload={'obj_key': obj_key},
+                )
 
-        if isinstance(c, CommentOnGCN):  # also update the GcnEvent
-            self.push_all(
-                action='skyportal/REFRESH_GCNEVENT',
-                payload={'gcnEvent_dateobs': gcnevent_dateobs},
-            )
-        elif isinstance(c, CommentOnSpectrum):  # also update the spectrum
-            self.push_all(
-                action='skyportal/REFRESH_SOURCE_SPECTRA',
-                payload={'obj_internal_key': obj_key},
-            )
-        elif isinstance(c, CommentOnShift):  # also update the shift
-            self.push_all(
-                action='skyportal/REFRESH_SHIFTS',
-            )
+            if isinstance(c, CommentOnGCN):  # also update the GcnEvent
+                self.push_all(
+                    action='skyportal/REFRESH_GCNEVENT',
+                    payload={'gcnEvent_dateobs': gcnevent_dateobs},
+                )
+            elif isinstance(c, CommentOnSpectrum):  # also update the spectrum
+                self.push_all(
+                    action='skyportal/REFRESH_SOURCE_SPECTRA',
+                    payload={'obj_internal_key': obj_key},
+                )
+            elif isinstance(c, CommentOnShift):  # also update the shift
+                self.push_all(
+                    action='skyportal/REFRESH_SHIFTS',
+                )
 
-        return self.success()
+            return self.success()
 
 
 class CommentAttachmentHandler(BaseHandler):
@@ -848,6 +852,8 @@ class CommentAttachmentHandler(BaseHandler):
 
         """
 
+        start = time.time()
+
         try:
             comment_id = int(comment_id)
         except (TypeError, ValueError):
@@ -865,31 +871,40 @@ class CommentAttachmentHandler(BaseHandler):
                 return self.error('Could not find any accessible comments.', status=403)
             comment_resource_id_str = str(comment.obj_id)
 
-        elif associated_resource_type.lower() == "spectra":
-            try:
-                comment = CommentOnSpectrum.get_if_accessible_by(
-                    comment_id, self.current_user, raise_if_none=True
-                )
-            except AccessError:
-                return self.error('Could not find any accessible comments.', status=403)
-            comment_resource_id_str = str(comment.spectrum_id)
+            elif associated_resource_type.lower() == "spectra":
+                comment = session.scalars(
+                    CommentOnSpectrum.select(self.current_user).where(
+                        CommentOnSpectrum.id == comment_id
+                    )
+                ).first()
+                if comment is None:
+                    return self.error(
+                        'Could not find any accessible comments.', status=403
+                    )
+                comment_resource_id_str = str(comment.spectrum_id)
 
-        elif associated_resource_type.lower() == "gcn_event":
-            try:
-                comment = CommentOnGCN.get_if_accessible_by(
-                    comment_id, self.current_user, raise_if_none=True
-                )
-            except AccessError:
-                return self.error('Could not find any accessible comments.', status=403)
-            comment_resource_id_str = str(comment.gcn_id)
-        elif associated_resource_type.lower() == "shift":
-            try:
-                comment = CommentOnShift.get_if_accessible_by(
-                    comment_id, self.current_user, raise_if_none=True
-                )
-            except AccessError:
-                return self.error('Could not find any accessible comments.', status=403)
-            comment_resource_id_str = str(comment.shift_id)
+            elif associated_resource_type.lower() == "gcn_event":
+                comment = session.scalars(
+                    CommentOnGCN.select(self.current_user).where(
+                        CommentOnGCN.id == comment_id
+                    )
+                ).first()
+                if comment is None:
+                    return self.error(
+                        'Could not find any accessible comments.', status=403
+                    )
+                comment_resource_id_str = str(comment.gcn_id)
+            elif associated_resource_type.lower() == "shift":
+                comment = session.scalars(
+                    CommentOnShift.select(self.current_user).where(
+                        CommentOnShift.id == comment_id
+                    )
+                ).first()
+                if comment is None:
+                    return self.error(
+                        'Could not find any accessible comments.', status=403
+                    )
+                comment_resource_id_str = str(comment.shift_id)
 
         # add more options using elif
         else:
