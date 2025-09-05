@@ -19,6 +19,7 @@ from .annotation_services import (
     PS1QueryHandler,
     VizierQueryHandler,
 )
+from .boom_filter import BoomFilterHandler
 from .candidate.candidate import CandidateHandler
 from .candidate.candidate_filter import CandidateFilterHandler
 from .candidate.scan_report import ScanReportHandler

@@ -1,6 +1,7 @@
 __all__ = ["Filter"]
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from baselayer.app.models import AccessibleIfRelatedRowsAreAccessible, Base
@@ -51,4 +52,9 @@ class Filter(Base):
         passive_deletes=True,
         order_by="Candidate.passed_at",
         doc="Candidates that have passed the filter.",
+    )
+    altdata = sa.Column(
+        JSONB,
+        nullable=True,
+        doc="Additional data associated with the filter.",
     )

@@ -18,6 +18,7 @@ from skyportal.handlers.api import (
     AnalysisWebhookHandler,
     AnnotationHandler,
     AssignmentHandler,
+    BoomFilterHandler,
     BulkDeletePhotometryHandler,
     CandidateFilterHandler,
     CandidateHandler,
@@ -292,7 +293,8 @@ skyportal_handlers = [
         DefaultSurveyEfficiencyRequestHandler,
     ),
     (r"/api/facility", FacilityMessageHandler),
-    (r"/api/filters(/.*)?", FilterHandler),
+    (r"/api/filters(/.*)?", BoomFilterHandler),
+    # (r"/api/filters(/.*)?", FilterHandler),
     (
         r"/api/followup_request/([0-9A-Za-z-_\.\+]+)/comment",
         FollowupRequestCommentHandler,
