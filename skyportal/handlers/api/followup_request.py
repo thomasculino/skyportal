@@ -587,6 +587,33 @@ def post_followup_request(
     if allocation is None:
         raise ValueError(f"Could not find allocation with ID {data['allocation_id']}.")
 
+    # If validity ranges are defined, ensure that the request dates are within one of the ranges
+    ranges = allocation.validity_ranges
+    if isinstance(ranges, list) and ranges:
+        start_date, end_date = (
+            data["payload"].get("start_date"),
+            data["payload"].get("end_date"),
+        )
+        start = arrow.get(start_date) if start_date else arrow.utcnow()
+        for range in ranges:
+            if not range.get("start_date") or not range.get("end_date"):
+                raise ValueError(
+                    "Validity ranges must have both start_date and end_date defined."
+                )
+            if arrow.get(range["start_date"]) <= start <= arrow.get(
+                range["end_date"]
+            ) and (
+                end_date is None
+                or arrow.get(range["start_date"])
+                <= arrow.get(end_date)
+                <= arrow.get(range["end_date"])
+            ):
+                break
+        else:
+            raise ValueError(
+                f"{'Provided dates are' if start_date else 'Current date is'} outside allowed validity ranges."
+            )
+
     instrument = allocation.instrument
     if instrument is None:
         raise ValueError(f"Could not find instrument for allocation {allocation.id}.")
