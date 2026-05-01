@@ -120,7 +120,6 @@ const UploadPhotometryForm = () => {
     if (!dataRows.every((row) => row.length === headerLength)) {
       return "Invalid input: All data rows must have the same number of columns as header row";
     }
-
     for (const col of ["mjd", "filter", "magsys"]) {
       if (!header.includes(col)) {
         return `Invalid input: Missing required column: ${col}`;
@@ -365,6 +364,7 @@ const UploadPhotometryForm = () => {
                           render={({ field: { onChange, value } }) => (
                             <Select
                               labelId="instrumentSelectLabel"
+                              label="Instrument"
                               value={value}
                               onChange={onChange}
                             >
