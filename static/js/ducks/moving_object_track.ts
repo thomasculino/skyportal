@@ -20,6 +20,10 @@ export interface TrackLookup {
   n_nights: number | null;
   arc_days: number | null;
   designation: string | null;
+  bound_fit: "good" | "poor" | "none" | "ungated" | null;
+  bound_fit_residual_arcsec: number | null;
+  bound_fit_detections: number | null;
+  merged_from: string | null;
   detections: TrackEpoch[];
   members_withheld: number;
 }

@@ -90,6 +90,7 @@ const formValues = (profile: any) => ({
   numberDetections: 1,
   requireDetections: true,
   excludeForcedPhotometry: false,
+  onlyUnboundTracks: false,
   filterOrigin: null,
   filterKey: null,
   filterValue: "",
@@ -101,6 +102,13 @@ const formValues = (profile: any) => ({
 });
 
 // "true"/"false" become booleans: the endpoint casts the stored value to boolean for those.
+// Polled tracks no bound orbit fits well (bound_fit poor or none).
+const UNBOUND_TRACK_FILTER = JSON.stringify({
+  origin: "boom:track",
+  key: "unbound_candidate",
+  value: true,
+});
+
 const buildAnnotationFilter = (f: any) => {
   if (!f.filterOrigin || !f.filterKey) return null;
   const filter = { origin: f.filterOrigin, key: f.filterKey };
@@ -355,7 +363,13 @@ const FilterCandidateList = ({
       sortByAnnotationOrigin: sorting?.origin,
       sortByAnnotationKey: sorting?.key,
       sortByAnnotationOrder: sorting?.order,
-      annotationFilterList: buildAnnotationFilter(formData),
+      annotationFilterList:
+        [
+          buildAnnotationFilter(formData),
+          formData.onlyUnboundTracks && UNBOUND_TRACK_FILTER,
+        ]
+          .filter(Boolean)
+          .join(",") || null,
       _searchCount: searchCount + 1,
     });
   };
@@ -728,6 +742,12 @@ const FilterCandidateList = ({
               )}
             </Box>
             <Box sx={column}>
+              <FormCheckbox
+                name="onlyUnboundTracks"
+                control={control}
+                label="Tracks with no good bound orbit"
+                tooltip="Only moving-object tracks whose orbit fit is poor or found no bound orbit: possibly distant or unbound objects."
+              />
               <Section
                 title="Annotation filtering"
                 error={

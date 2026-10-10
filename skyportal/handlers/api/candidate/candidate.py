@@ -812,8 +812,6 @@ class CandidateHandler(BaseHandler):
             q = sa.select(Obj.id).join(
                 candidate_subquery, Obj.id == candidate_subquery.c.obj_id
             )
-            if annotation_filter_list is not None:
-                q = q.outerjoin(Annotation)
 
             if classifications:
                 q = q.join(Classification).where(
@@ -1001,12 +999,15 @@ class CandidateHandler(BaseHandler):
                             f'Invalid annotation filter list item {item}: "key" is required.'
                         )
 
+                    # One join per item, so items on different origins can all hold.
+                    ann = aliased(Annotation)
+                    q = q.join(ann, ann.obj_id == Obj.id)
                     if "value" in new_filter:
                         value = new_filter["value"]
                         if isinstance(value, bool):
                             q = q.where(
-                                Annotation.origin == new_filter["origin"],
-                                Annotation.data[new_filter["key"]].astext.cast(Boolean)
+                                ann.origin == new_filter["origin"],
+                                ann.data[new_filter["key"]].astext.cast(Boolean)
                                 == value,
                             )
                         else:
@@ -1026,19 +1027,17 @@ class CandidateHandler(BaseHandler):
                                 # need the string formatting above
                                 pass
                             q = q.where(
-                                Annotation.origin == new_filter["origin"],
-                                Annotation.data[new_filter["key"]].astext == value,
+                                ann.origin == new_filter["origin"],
+                                ann.data[new_filter["key"]].astext == value,
                             )
                     elif "min" in new_filter and "max" in new_filter:
                         try:
                             min_value = float(new_filter["min"])
                             max_value = float(new_filter["max"])
                             q = q.where(
-                                Annotation.origin == new_filter["origin"],
-                                Annotation.data[new_filter["key"]].cast(Float)
-                                >= min_value,
-                                Annotation.data[new_filter["key"]].cast(Float)
-                                <= max_value,
+                                ann.origin == new_filter["origin"],
+                                ann.data[new_filter["key"]].cast(Float) >= min_value,
+                                ann.data[new_filter["key"]].cast(Float) <= max_value,
                             )
                         except ValueError:
                             return self.error(

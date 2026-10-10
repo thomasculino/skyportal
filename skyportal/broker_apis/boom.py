@@ -549,6 +549,107 @@ def _cone_search_catalog(broker, catalog, ra, dec, radius, unit):
     return catalog, results
 
 
+# BOOM's linked-track feed, polled into SkyPortal by the ingestion service.
+TRACK_FEED = "ZTF_tracks"
+TRACK_POLL_INTERVAL = 600  # seconds
+TRACK_PAGE_SIZE = 200
+TRACK_SURVEY = "ZTF"
+
+
+def _tracks_config(altdata):
+    """``altdata['tracks']``: ``enabled``, ``poll_interval`` (s), ``group_ids``
+    saved to, optional ``filter_ids`` to scan them under, ``page_size``."""
+    conf = (altdata or {}).get("tracks") or {}
+    return {
+        "enabled": bool(conf.get("enabled")),
+        "poll_interval": float(conf.get("poll_interval") or TRACK_POLL_INTERVAL),
+        "group_ids": [int(g) for g in conf.get("group_ids") or []],
+        "filter_ids": [int(f) for f in conf.get("filter_ids") or []],
+        "page_size": int(conf.get("page_size") or TRACK_PAGE_SIZE),
+    }
+
+
+def _normalize_track(doc):
+    """A track as BOOM's track routes return it, in the shape the ingest reads."""
+    track = {
+        key: doc.get(key)
+        for key in (
+            "n_detections",
+            "n_nights",
+            "arc_days",
+            "first_jd",
+            "last_jd",
+            "bound_fit",
+            "bound_fit_residual_arcsec",
+            "bound_fit_detections",
+            "designation",
+            "updated_at",
+        )
+    }
+    track["id"] = str(doc["_id"])
+    track["members"] = [str(m) for m in doc.get("members") or []]
+    track["detections"] = [
+        {**epoch, "candid": str(epoch["candid"])}
+        for epoch in doc.get("epochs") or []
+        if epoch.get("candid") is not None
+    ]
+    track["absorbed_ids"] = [str(a) for a in doc.get("absorbed_ids") or []]
+    return track
+
+
+def fetch_tracks(broker, cursor, limit, survey=TRACK_SURVEY):
+    """One page of tracks changed since ``cursor``, oldest change first.
+
+    ``cursor`` is what the previous page returned (``None`` to start from the
+    beginning). Returns ``(tracks, next_cursor)``; ``next_cursor`` is the
+    position after this page, to store once the page is ingested.
+    """
+    params = {"limit": int(limit)}
+    if cursor and cursor.get("cursor"):
+        params["cursor"] = cursor["cursor"]
+    else:
+        params["updated_since"] = (cursor or {}).get("updated_since", 0)
+    page = _request(broker, "GET", f"surveys/{survey.lower()}/tracks", params=params)
+    page = page or {}
+    tracks = [_normalize_track(doc) for doc in page.get("tracks") or []]
+    if page.get("next_cursor"):
+        next_cursor = {"cursor": page["next_cursor"]}
+    elif tracks:
+        # updated_since is inclusive, so a same-second track is re-read rather
+        # than skipped; re-ingesting an unchanged track is a no-op.
+        next_cursor = {"updated_since": tracks[-1]["updated_at"]}
+    else:
+        next_cursor = cursor
+    return tracks, next_cursor
+
+
+def _visible_detections(broker, candids, permissions, survey=TRACK_SURVEY):
+    """candid -> the alert's programid and flux, for the members ``permissions``
+    may see. Flux is read from the alert so a detection the alert path also
+    saved lands on the same photometry row instead of a near-duplicate."""
+    if not candids:
+        return {}
+    scope = _scope_filter({"permissions": permissions}, survey)
+    if scope == DENY_ALL:
+        return {}
+    found = _request(
+        broker,
+        "POST",
+        "queries/find",
+        json={
+            "catalog_name": f"{survey}_alerts",
+            "filter": {"_id": {"$in": [int(c) for c in candids]}, **scope},
+            "projection": {
+                "candidate.programid": 1,
+                "candidate.psfFlux": 1,
+                "candidate.psfFluxErr": 1,
+            },
+            "limit": len(candids),
+        },
+    )
+    return {str(doc["_id"]): doc.get("candidate") or {} for doc in found or []}
+
+
 class BOOMBROKER(BrokerAPI):
     """The BOOM broker (kaboom.caltech.edu, ZTF/LSST alerts).
 
@@ -627,6 +728,33 @@ class BOOMBROKER(BrokerAPI):
                     "num_consumers": {
                         "type": "integer",
                         "title": "Number of consumers",
+                    },
+                },
+            },
+            "tracks": {
+                "type": "object",
+                "title": "Moving-object tracks (ingestion only)",
+                "description": (
+                    "Poll BOOM's nightly linked tracks into SkyPortal, one "
+                    "object per track. Each group gets only the detections "
+                    "its streams cover."
+                ),
+                "properties": {
+                    "enabled": {"type": "boolean", "title": "Enabled"},
+                    "poll_interval": {
+                        "type": "integer",
+                        "title": "Poll interval (seconds)",
+                        "default": TRACK_POLL_INTERVAL,
+                    },
+                    "group_ids": {
+                        "type": "array",
+                        "title": "Group ids to save tracks to",
+                        "items": {"type": "integer"},
+                    },
+                    "filter_ids": {
+                        "type": "array",
+                        "title": "Filter ids to scan tracks under",
+                        "items": {"type": "integer"},
                     },
                 },
             },
@@ -793,30 +921,11 @@ class BOOMBROKER(BrokerAPI):
         """A linked track and the detections that make it up.
 
         Two queries: the track for its members, then those alerts for their
-        positions. The track carries candids only, and a vetting view needs
-        jd/ra/dec/mag/band, so fetching them here keeps that one round trip.
+        positions, scoped to the requester's streams. The track route resolves
+        an id the linker merged away to the track that absorbed it.
         """
         survey = _survey(kwargs)
-        found = _request(
-            broker,
-            "POST",
-            "queries/find",
-            json={
-                "catalog_name": f"{survey}_tracks",
-                "filter": {"_id": str(track_id)},
-                "projection": {
-                    "members": 1,
-                    "n_detections": 1,
-                    "n_nights": 1,
-                    "arc_days": 1,
-                    "first_jd": 1,
-                    "last_jd": 1,
-                    "designation": 1,
-                },
-                "limit": 1,
-            },
-        )
-        track = (found or [None])[0]
+        track = _request(broker, "GET", f"surveys/{survey.lower()}/tracks/{track_id}")
         if not track:
             raise ValueError(f"No track {track_id} in {survey}_tracks")
 
@@ -873,6 +982,15 @@ class BOOMBROKER(BrokerAPI):
             "first_jd": track.get("first_jd"),
             "last_jd": track.get("last_jd"),
             "designation": track.get("designation"),
+            "bound_fit": track.get("bound_fit"),
+            "bound_fit_residual_arcsec": track.get("bound_fit_residual_arcsec"),
+            "bound_fit_detections": track.get("bound_fit_detections"),
+            # Set when ``track_id`` was absorbed into the track returned.
+            "merged_from": (
+                str(track_id)
+                if str(track.get("_id", track_id)) != str(track_id)
+                else None
+            ),
             "detections": detections,
             # Members the requester's streams do not cover are simply absent,
             # so say so rather than let a short arc look like the whole track.
@@ -963,11 +1081,153 @@ class BOOMBROKER(BrokerAPI):
         return data["query"]
 
     @staticmethod
-    async def run_ingestion(broker, stop=None, max_messages=None, **kwargs):
+    async def poll_tracks_page(broker, conf=None):
+        """Ingest one page of BOOM's track feed and advance the stored cursor.
+
+        Each track commits on its own; the cursor moves only once the whole page
+        is in, so a restart re-reads the page and the tracks already ingested
+        come back unchanged. Returns how many tracks the page held.
+        """
+        import asyncio
+
+        import sqlalchemy as sa
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from sqlalchemy.orm import selectinload
+
+        from baselayer.app.models import async_plain_session_factory, utcnow
+
+        from ..models import BrokerIngestCursor, Filter, Group, User
+        from ..utils.sso_ingest import ingest_track
+        from .interface import survey_permissions
+
+        conf = conf or _tracks_config(broker.altdata)
+        async with async_plain_session_factory() as session:
+            cursor = await session.scalar(
+                sa.select(BrokerIngestCursor.cursor).where(
+                    BrokerIngestCursor.broker_id == broker.id,
+                    BrokerIngestCursor.name == TRACK_FEED,
+                )
+            )
+            filter_group = dict(
+                (
+                    await session.execute(
+                        sa.select(Filter.id, Filter.group_id).where(
+                            Filter.id.in_(conf["filter_ids"])
+                        )
+                    )
+                ).all()
+            )
+            groups = (
+                await session.scalars(
+                    sa.select(Group)
+                    .options(selectinload(Group.streams))
+                    .where(Group.id.in_({*conf["group_ids"], *filter_group.values()}))
+                )
+            ).all()
+            permissions = {g.id: survey_permissions(g.streams) for g in groups}
+
+        tracks, next_cursor = await asyncio.to_thread(
+            fetch_tracks, broker, cursor, conf["page_size"]
+        )
+
+        # What each group may see, asked of BOOM once per distinct stream scope.
+        candids = sorted({d["candid"] for t in tracks for d in t["detections"]})
+        by_scope, visible = {}, {}
+        for group_id, scope in permissions.items():
+            key = json.dumps(scope, sort_keys=True)
+            if key not in by_scope:
+                by_scope[key] = await asyncio.to_thread(
+                    _visible_detections, broker, candids, scope
+                )
+            visible[group_id] = by_scope[key]
+
+        for track in tracks:
+            alerts = {}
+            seen_by = set()
+            for group_id, seen in visible.items():
+                for d in track["detections"]:
+                    if d["candid"] in seen:
+                        alerts[d["candid"]] = seen[d["candid"]]
+                        seen_by.add(group_id)
+            if not alerts:
+                log(f"track {track['id']}: no detection visible to its groups")
+                continue
+            detections = []
+            for d in track["detections"]:
+                alert = alerts.get(d["candid"])
+                if alert is None:
+                    continue
+                point = {**d, "programid": alert.get("programid", 1)}
+                if alert.get("psfFluxErr") is not None:
+                    point["psfFlux"] = alert.get("psfFlux")
+                    point["psfFluxErr"] = alert["psfFluxErr"]
+                detections.append(point)
+            async with async_plain_session_factory() as session:
+                user = await session.scalar(sa.select(User).where(User.id == 1))
+                await ingest_track(
+                    track,
+                    detections,
+                    TRACK_SURVEY,
+                    session,
+                    user,
+                    [g for g in conf["group_ids"] if g in seen_by],
+                    [f for f, g in filter_group.items() if g in seen_by],
+                )
+
+        async with async_plain_session_factory() as session:
+            await session.execute(
+                pg_insert(BrokerIngestCursor)
+                .values(broker_id=broker.id, name=TRACK_FEED, cursor=next_cursor)
+                .on_conflict_do_update(
+                    index_elements=["broker_id", "name"],
+                    set_={"cursor": next_cursor, "modified": utcnow},
+                )
+            )
+            await session.commit()
+        return len(tracks)
+
+    @staticmethod
+    async def poll_tracks(broker, stop=None):
+        """Poll BOOM's linked-track feed until ``stop``. Tracks are built after
+        each night, after their alerts went through the filters, so no alert
+        ever carries one; this is how they reach SkyPortal."""
+        import asyncio
+
+        conf = _tracks_config(broker.altdata)
+        log(
+            f"BOOM track polling (broker {broker.id}): every "
+            f"{conf['poll_interval']:.0f}s into groups {conf['group_ids']}"
+        )
+
+        def stopped():
+            return stop is not None and stop.is_set()
+
+        while not stopped():
+            try:
+                read = await BOOMBROKER.poll_tracks_page(broker, conf)
+            except Exception as e:
+                # The cursor did not move, so the next poll retries this page.
+                log(f"BOOM track poll (broker {broker.id}) failed: {e}")
+                read = 0
+            if read >= conf["page_size"]:
+                continue
+            slept = 0.0
+            while slept < conf["poll_interval"] and not stopped():
+                await asyncio.sleep(min(5.0, conf["poll_interval"] - slept))
+                slept += 5.0
+
+    @staticmethod
+    async def run_ingestion(
+        broker, stop=None, max_messages=None, process_index=0, **kwargs
+    ):
         """Consume BOOM's Kafka filter-result streams (Avro) and register each
         alert as a Candidate under the skyportal Filters mapped to the BOOM filter
         ids it passed (``Filter.altdata['boom']['filter_id']``), falling back to
         ``broker.altdata['filter_ids']``. Kafka config in ``broker.altdata['kafka']``.
+
+        With ``altdata['tracks']['enabled']``, process 0 also polls BOOM's
+        linked-track feed (see ``poll_tracks``); the Kafka consumers replicate
+        across processes, the poller must not.
         """
         import asyncio
 
@@ -1024,6 +1284,8 @@ class BOOMBROKER(BrokerAPI):
         )
         # TaskGroup so one consumer crashing cancels its siblings, not orphans them.
         async with asyncio.TaskGroup() as tg:
+            if process_index == 0 and _tracks_config(altdata)["enabled"]:
+                tg.create_task(BOOMBROKER.poll_tracks(broker, stop))
             tasks = [
                 tg.create_task(
                     BOOMBROKER._consume_stream(

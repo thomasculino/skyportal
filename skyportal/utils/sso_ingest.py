@@ -586,3 +586,287 @@ async def ingest_sso_alert(
     await session.commit()
 
     return {"id": obj_id}
+
+
+# Where a polled track's own fields are recorded on its Obj, and the orbit-fit
+# verdicts that make it worth a look: no bound orbit fits it well.
+TRACK_ANNOTATION_ORIGIN = "boom:track"
+TRACK_FIELDS = (
+    "n_detections",
+    "n_nights",
+    "arc_days",
+    "first_jd",
+    "last_jd",
+    "bound_fit",
+    "bound_fit_residual_arcsec",
+    "bound_fit_detections",
+    "designation",
+    "updated_at",
+)
+UNBOUND_FITS = ("poor", "none")
+
+
+async def fold_obj(session, from_id, into_id):
+    """Move what was gathered under ``from_id`` onto ``into_id``.
+
+    For a track the linker absorbed into another, or one the MPC since named.
+    Rows the survivor already has (the same photometry point, a Source in the
+    same group) are dropped rather than duplicated. The emptied Obj is kept and
+    marked, so nothing hanging off it that is not moved here is lost.
+    Returns whether anything was folded.
+    """
+    from ..broker_apis._save import get_or_create_obj
+    from ..models import Annotation, Classification, Comment, Photometry
+
+    if from_id == into_id:
+        return False
+    absorbed = await session.scalar(sa.select(Obj).where(Obj.id == from_id))
+    if absorbed is None or (absorbed.altdata or {}).get("absorbed_into") == into_id:
+        return False
+    survivor, _ = await get_or_create_obj(
+        session, into_id, origin=absorbed.origin, ra=absorbed.ra, dec=absorbed.dec
+    )
+
+    async def move(model, *same):
+        """Re-point rows unless the survivor has one matching on ``same``."""
+        dup = sa.orm.aliased(model)
+        clash = sa.exists().where(
+            dup.obj_id == into_id,
+            *(getattr(dup, c).is_not_distinct_from(getattr(model, c)) for c in same),
+        )
+        where = [model.obj_id == from_id]
+        if same:
+            where.append(~clash)
+        await session.execute(
+            sa.update(model)
+            .where(*where)
+            .values(obj_id=into_id)
+            .execution_options(synchronize_session=False)
+        )
+        if same:
+            await session.execute(
+                sa.delete(model)
+                .where(model.obj_id == from_id)
+                .execution_options(synchronize_session=False)
+            )
+
+    await move(Photometry, *(c for c in Photometry.DEDUP_COLUMNS if c != "obj_id"))
+    await move(Source, "group_id")
+    await move(Candidate, "filter_id", "passed_at")
+    await move(Annotation, "origin")
+    await move(Comment)
+    await move(Classification)
+
+    absorbed.altdata = {**(absorbed.altdata or {}), "absorbed_into": into_id}
+    altdata = dict(survivor.altdata or {})
+    altdata["absorbed"] = sorted({*(altdata.get("absorbed") or []), from_id})
+    survivor.altdata = altdata
+    log(f"folded {from_id} into {into_id}")
+    return True
+
+
+async def ingest_track(
+    track, detections, survey, session, user, group_ids, filter_ids=None
+):
+    """Create or update the Obj for one linked track polled from the broker.
+
+    Every member is a detection of this object, so all of ``detections`` become
+    photometry (unlike an alert, whose position-keyed history is not). The
+    caller has already cut ``detections`` to what ``group_ids`` may see.
+
+    Keyed like the alert path: on the designation once the MPC has named the
+    object (a recovery), else on the track id (a discovery candidate). Tracks
+    the linker absorbed into this one, and this track's own ``trk_`` Obj once it
+    has a designation, are folded in.
+
+    Parameters
+    ----------
+    track : dict
+        The track's fields (see ``TRACK_FIELDS``) plus ``id`` and ``absorbed_ids``.
+    detections : list of dict
+        Visible member detections: candid, jd, ra, dec, band, programid, and
+        either psfFlux/psfFluxErr (nJy) or magpsf/sigmapsf.
+
+    Returns
+    -------
+    dict
+        ``{"id": obj_id, "changed": bool}``; unchanged when this version of the
+        track was already ingested.
+    """
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from baselayer.app.models import utcnow
+
+    from ..broker_apis._save import (
+        add_source,
+        build_photometry_groups,
+        get_or_create_obj,
+        programid_to_stream_ids,
+        xact_lock,
+    )
+    from ..handlers.api.photometry import add_external_photometry
+    from ..models import Annotation, GroupAnnotation, Instrument
+    from .survey import instrument_name
+
+    track_id = str(track["id"])
+    designation = track.get("designation") or None
+    updated_at = track.get("updated_at")
+    obj_id, kind, _ = sso_key_for(
+        {"properties": {"sso": {"designation": designation}, "track": {"id": track_id}}}
+    )
+
+    folded_ids = {track_to_obj_id(a) for a in track.get("absorbed_ids") or []}
+    if kind == "designation":
+        folded_ids.add(track_to_obj_id(track_id))
+    folded_ids.discard(obj_id)
+    # Sorted, so two tracks folding into each other cannot deadlock.
+    for key in sorted({obj_id, *folded_ids}):
+        await xact_lock(session, key)
+
+    folded = False
+    for from_id in sorted(folded_ids):
+        folded |= await fold_obj(session, from_id, obj_id)
+
+    # A version already ingested for these groups is a no-op; a group added
+    # since still gets the detections it may see.
+    existing = await session.scalar(sa.select(Obj).where(Obj.id == obj_id))
+    seen = ((existing.altdata or {}).get("boom_tracks") or {}) if existing else {}
+    before = seen.get(track_id) or {}
+    same_version = updated_at is not None and before.get("updated_at") == updated_at
+    if (
+        not folded
+        and same_version
+        and set(group_ids or []) <= set(before.get("group_ids") or [])
+    ):
+        await session.commit()
+        return {"id": obj_id, "changed": False}
+
+    instrument_id = await session.scalar(
+        sa.select(Instrument.id).where(Instrument.name == instrument_name(survey))
+    )
+    if instrument_id is None:
+        raise ValueError(
+            f"Instrument '{instrument_name(survey)}' not found in the database."
+        )
+
+    obj, _ = await get_or_create_obj(session, obj_id, origin=survey)
+    obj.is_roid = True
+    if designation:
+        obj.mpc_name = designation
+        alias = sso_label(designation)
+        aliases = set(obj.alias or [])
+        if alias not in aliases:
+            obj.alias = sorted(aliases | {alias})
+    altdata = dict(obj.altdata or {})
+    # Position is where it was last seen, among the detections kept.
+    latest = max(
+        (d for d in detections if d.get("ra") is not None and d.get("jd") is not None),
+        key=lambda d: d["jd"],
+        default=None,
+    )
+    if latest is not None:
+        obj.ra, obj.dec = latest["ra"], latest["dec"]
+        obj.healpix = ha.constants.HPX.lonlat_to_healpix(
+            latest["ra"] * u.deg, latest["dec"] * u.deg
+        )
+        altdata["last_detection_jd"] = latest["jd"]
+    altdata["boom_tracks"] = {
+        **seen,
+        track_id: {
+            "updated_at": updated_at,
+            "group_ids": sorted(
+                {*(group_ids or []), *(before.get("group_ids") or [])}
+                if same_version
+                else set(group_ids or [])
+            ),
+        },
+    }
+    obj.altdata = altdata
+    await session.flush()
+
+    data = {field: track.get(field) for field in TRACK_FIELDS}
+    data["track_id"] = track_id
+    data["unbound_candidate"] = track.get("bound_fit") in UNBOUND_FITS
+    # The broker's counts include detections these groups may not see.
+    data["n_detections_saved"] = len(detections)
+    annotation_id = await session.scalar(
+        pg_insert(Annotation)
+        .values(
+            obj_id=obj_id,
+            origin=TRACK_ANNOTATION_ORIGIN,
+            data=data,
+            author_id=user.id,
+        )
+        .on_conflict_do_update(
+            index_elements=["obj_id", "origin"],
+            set_={"data": data, "modified": utcnow},
+            where=Annotation.author_id == user.id,
+        )
+        .returning(Annotation.id)
+    )
+    if annotation_id is not None:
+        for group_id in group_ids or []:
+            await session.execute(
+                pg_insert(GroupAnnotation)
+                .values(group_id=group_id, annotation_id=annotation_id)
+                .on_conflict_do_nothing()
+            )
+
+    for group_id in group_ids or []:
+        source = await session.scalar(
+            sa.select(Source).where(
+                Source.obj_id == obj_id, Source.group_id == group_id
+            )
+        )
+        if source is None:
+            await add_source(
+                session,
+                obj_id=obj_id,
+                group_id=group_id,
+                saved_by_id=user.id,
+                active=True,
+            )
+        else:
+            source.active = True
+
+    # One Candidate per version of the track, so a track that changed is
+    # scanned again while a re-poll of the same version is not.
+    passing_alert_id = int(updated_at) if updated_at is not None else None
+    for filter_id in filter_ids or []:
+        exists = await session.scalar(
+            sa.select(Candidate).where(
+                Candidate.obj_id == obj_id,
+                Candidate.filter_id == filter_id,
+                Candidate.passing_alert_id == passing_alert_id,
+            )
+        )
+        if exists is None:
+            session.add(
+                Candidate(
+                    obj_id=obj_id,
+                    filter_id=filter_id,
+                    passed_at=utcnow_naive(),
+                    passing_alert_id=passing_alert_id,
+                    uploader_id=user.id,
+                )
+            )
+
+    if detections:
+        programid2streamid = await programid_to_stream_ids(session)
+        photometry_data = build_photometry_groups(
+            obj_id,
+            survey,
+            {"prv_candidates": detections},
+            instrument_id,
+            programid2streamid,
+        )
+        for pd in photometry_data.values():
+            if pd["mjd"]:
+                await add_external_photometry(
+                    pd, user, session, apply_default_share=False
+                )
+
+    if designation:
+        await _link_designation(session, obj_id, designation)
+    await session.commit()
+    return {"id": obj_id, "changed": True}

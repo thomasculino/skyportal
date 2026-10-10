@@ -50,7 +50,7 @@ async def _run_broker(broker):
     single broker crash doesn't take down the service. Returns whether it ended
     without crashing."""
     try:
-        await broker.broker_class.run_ingestion(broker)
+        await broker.broker_class.run_ingestion(broker, process_index=_PROCESS_INDEX)
     except Exception as e:
         log(f"broker {broker.id} ({broker.name}) ingestion crashed: {e}")
         return False

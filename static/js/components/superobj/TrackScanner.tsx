@@ -42,6 +42,12 @@ const trackOrbit = (track: SuperObj): Record<string, unknown> => {
   return {};
 };
 
+// No bound orbit fits well: possibly a distant or unbound object.
+const UNBOUND_FITS = ["poor", "none"];
+
+const isUnbound = (track: SuperObj) =>
+  UNBOUND_FITS.includes(String(trackOrbit(track)["bound_fit"]));
+
 const num = (value: unknown, digits = 3) =>
   typeof value === "number" ? value.toFixed(digits) : null;
 
@@ -133,6 +139,13 @@ const TrackRow = ({
           {track.name || `Track ${track.id}`}
         </Typography>
         {isNeo && <Chip size="small" color="warning" label="NEO candidate" />}
+        {typeof orbit["bound_fit"] === "string" && (
+          <Chip
+            size="small"
+            color={isUnbound(track) ? "warning" : "default"}
+            label={`bound fit: ${orbit["bound_fit"]}`}
+          />
+        )}
         <Box sx={{ flexGrow: 1 }} />
         <SaveTrackButton
           trackName={track.name || `Track ${track.id}`}
@@ -204,6 +217,7 @@ const TrackScanner = () => {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(25);
   const [onlyMultiEpoch, setOnlyMultiEpoch] = useState(true);
+  const [onlyUnbound, setOnlyUnbound] = useState(false);
   const userGroups = useGetGroupsQuery().data?.userAccessible ?? [];
 
   const { data, isFetching, error } = useGetSuperObjsQuery({
@@ -214,7 +228,9 @@ const TrackScanner = () => {
   });
 
   const tracks = (data?.superObjs || []).filter(
-    (track) => !onlyMultiEpoch || distinctEpochs(track).length > 1,
+    (track) =>
+      (!onlyMultiEpoch || distinctEpochs(track).length > 1) &&
+      (!onlyUnbound || isUnbound(track)),
   );
 
   return (
@@ -233,6 +249,15 @@ const TrackScanner = () => {
             />
           }
           label="Multi-epoch only"
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={onlyUnbound}
+              onChange={(e) => setOnlyUnbound(e.target.checked)}
+            />
+          }
+          label="No good bound orbit"
         />
         {isFetching && <CircularProgress size={20} />}
       </Stack>

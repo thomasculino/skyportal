@@ -9,6 +9,7 @@ import { useTheme } from "@mui/material/styles";
 
 import {
   MeasuredEpoch,
+  TrackLookup,
   TrackMeasurement,
 } from "../../ducks/moving_object_track";
 import KnownObjectVerdictPanel from "./KnownObjectVerdictPanel";
@@ -75,7 +76,35 @@ const CutoutStrip = ({ detections }: { detections: MeasuredEpoch[] }) => (
 
 interface TrackVettingPanelProps {
   measurement: TrackMeasurement;
+  track?: TrackLookup;
 }
+
+/** The linker's orbit-fit verdict; no good bound fit is the interesting case. */
+const BoundFitVerdict = ({ track }: { track: TrackLookup }) => {
+  if (!track.bound_fit) return null;
+  const residual =
+    track.bound_fit_residual_arcsec != null
+      ? ` (${track.bound_fit_residual_arcsec.toFixed(2)}" residual through ${track.bound_fit_detections ?? "?"} detections)`
+      : "";
+  const text: Record<string, string> = {
+    good: `A bound orbit fits this track well${residual}.`,
+    poor: `No bound orbit fits this track well${residual}: possibly a distant or unbound object.`,
+    none: "No bound orbit fits this track: possibly a distant or unbound object.",
+    ungated: "The orbit fit was not run on this track.",
+  };
+  return (
+    <Alert
+      severity={
+        track.bound_fit === "poor" || track.bound_fit === "none"
+          ? "warning"
+          : "info"
+      }
+      sx={{ fontSize: "0.75rem" }}
+    >
+      {text[track.bound_fit] ?? `Bound fit: ${track.bound_fit}`}
+    </Alert>
+  );
+};
 
 /**
  * Deciding whether a set of detections is one real moving object.
@@ -83,7 +112,7 @@ interface TrackVettingPanelProps {
  * The detections carry many object ids because a positional survey renames a
  * mover every visit, so nothing here is keyed on one.
  */
-const TrackVettingPanel = ({ measurement }: TrackVettingPanelProps) => {
+const TrackVettingPanel = ({ measurement, track }: TrackVettingPanelProps) => {
   const theme = useTheme();
   const { detections, motion, position_angles: angles } = measurement;
 
@@ -157,6 +186,8 @@ const TrackVettingPanel = ({ measurement }: TrackVettingPanelProps) => {
           />
         )}
       </Box>
+
+      {track && <BoundFitVerdict track={track} />}
 
       {!motion && (
         <Alert severity="info" sx={{ fontSize: "0.75rem" }}>

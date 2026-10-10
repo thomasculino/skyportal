@@ -104,6 +104,26 @@ const TrackCandidateSummary = ({
       {track.arc_days != null && (
         <Chip size="small" label={`${track.arc_days.toFixed(1)} d arc`} />
       )}
+      {track.merged_from && (
+        <Chip size="small" label={`merged from ${track.merged_from}`} />
+      )}
+      {track.bound_fit && (
+        <Chip
+          size="small"
+          // No bound orbit fits well: possibly a distant or unbound object.
+          color={
+            track.bound_fit === "poor" || track.bound_fit === "none"
+              ? "warning"
+              : "default"
+          }
+          label={`bound fit: ${track.bound_fit}`}
+          title={
+            track.bound_fit_residual_arcsec != null
+              ? `${track.bound_fit_residual_arcsec.toFixed(2)}" residual through ${track.bound_fit_detections ?? "?"} detections`
+              : undefined
+          }
+        />
+      )}
       {track.designation && (
         <Chip size="small" color="info" label={`known: ${track.designation}`} />
       )}
@@ -158,7 +178,7 @@ const TrackCandidateSummary = ({
       >
         <DialogTitle>Vetting {track.id}</DialogTitle>
         <DialogContent>
-          {vetting && <TrackVettingPanel measurement={vetting} />}
+          {vetting && <TrackVettingPanel measurement={vetting} track={track} />}
         </DialogContent>
       </Dialog>
     </Box>

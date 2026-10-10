@@ -1,8 +1,9 @@
-__all__ = ["Broker"]
+__all__ = ["Broker", "BrokerIngestCursor"]
 
 import json
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils.types import JSONType
 from sqlalchemy_utils.types.encrypted.encrypted_type import (
@@ -130,3 +131,24 @@ class Broker(Base):
     def broker_class(self):
         """The registered BrokerAPI provider class for this broker."""
         return getattr(broker_apis, self.broker_classname)
+
+
+class BrokerIngestCursor(Base):
+    """How far a REST-polling ingestion loop has read one of a broker's feeds,
+    kept here so a restart resumes where it stopped."""
+
+    __tablename__ = "broker_ingest_cursors"
+
+    create = read = update = delete = restricted
+
+    broker_id = sa.Column(
+        sa.ForeignKey("brokers.id", ondelete="CASCADE"),
+        nullable=False,
+        doc="The Broker whose feed this cursor reads.",
+    )
+    name = sa.Column(
+        sa.String, nullable=False, doc="Which of the broker's feeds (e.g. ZTF_tracks)."
+    )
+    cursor = sa.Column(JSONB, nullable=True, doc="Opaque position to resume from.")
+
+    __table_args__ = (sa.UniqueConstraint("broker_id", "name"),)
